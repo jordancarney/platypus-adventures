@@ -7,6 +7,7 @@ import { input } from './input.js';
 import { audio } from './audio.js';
 import { touch } from './touch.js';
 import { migrateLegacySave } from './save.js';
+import { initUpdateCheck } from './updates.js';
 import { Game } from './game.js';
 
 const canvas = document.getElementById('game');
@@ -24,6 +25,7 @@ migrateLegacySave();
 
 const game = new Game(ctx);
 if (DEBUG) window.__game = game; // inspect internals from the console with ?debug=1
+initUpdateCheck(game);
 
 // Fill the window as much as the 5:3 view allows, letterboxing only the short axis.
 // Subtracts the safe-area padding on body so notches never clip the canvas.

@@ -43,6 +43,16 @@ All asset paths are relative, so it works from a subpath like `/platypus-adventu
 without configuration. The `.nojekyll` file tells Pages to publish the files as-is instead
 of running them through Jekyll.
 
+### Releasing an update
+
+Bump `VERSION` in [js/version.js](js/version.js) as part of the deploy. Live sessions
+poll that file with caching disabled (on load, every 10 minutes, and whenever the tab is
+foregrounded) and reload themselves when it changes — immediately on the title screen,
+or deferred until the player returns there. This is what rescues a phone/iPad tab that's
+been open since before the deploy; without the bump, devices still update, but only after
+their normal cache expiry and a manual reload. The running build is stamped in the corner
+of the title screen.
+
 ## Controls
 
 ### Keyboard

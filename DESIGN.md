@@ -155,6 +155,8 @@ F3 = full heal, F4 = +500 coins/+50 diamonds, G = god mode.
 | `js/input.js` | keyboard + touch state → named actions |
 | `js/touch.js` | thumbstick, action buttons, menu taps, haptics |
 | `js/font.js` | 5x7 bitmap font (canvas fillText blurs when upscaled) |
+| `js/version.js` | build version constant — bump on every deploy |
+| `js/updates.js` | polls version.js, self-refreshes stale sessions |
 | `js/audio.js` | WebAudio SFX synth + music sequencer |
 | `js/pixelart.js` | ASCII pixel-map sprite atlas |
 | `js/tiles.js` | tile ids, defs, procedural tile atlas |

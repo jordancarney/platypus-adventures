@@ -83,7 +83,8 @@ function releaseAll() {
 
 function onDown(e) {
   if (!canvas) return;
-  if (e.pointerType === 'touch' || e.pointerType === 'pen') enabled = true;
+  const touchLike = e.pointerType === 'touch' || e.pointerType === 'pen';
+  if (touchLike) enabled = true;
   // A recycled pointerId means we missed that pointer's release; let go of it first,
   // otherwise its stick/button stays held for the rest of the session.
   if (pointers.has(e.pointerId)) {
@@ -93,7 +94,10 @@ function onDown(e) {
   const [x, y] = toInternal(e.clientX, e.clientY);
   const rec = { sx: e.clientX, sy: e.clientY, t0: performance.now(), moved: false, kind: 'tap' };
 
-  if (padActive) {
+  // Only real touches drive the pad. A mouse click must stay a plain tap (for menus) —
+  // otherwise clicking the lower-left of the canvas on desktop grabs an INVISIBLE stick,
+  // and a click-drag whose release lands outside the window leaves Gus walking forever.
+  if (padActive && touchLike) {
     const top = hitButton(TOP_BUTTONS, x, y);
     const btn = top || hitButton(PAD_BUTTONS, x, y);
     if (btn) {
@@ -101,12 +105,29 @@ function onDown(e) {
       rec.action = btn.action;
       press(btn.action);
       buzz(8);
-    } else if (inStickZone(x, y) && !stick.active) {
+    } else if (inStickZone(x, y)) {
+      // Latest touch in the zone always wins the stick. iPadOS can steal a touch with NO
+      // event at all (edge swipes, notification pulls) — if the old owner blocked new
+      // grabs, the stick jammed until an app switch, and re-grabbing (the natural fix a
+      // player reaches for) did nothing. Stealing also costs little in normal play: a
+      // stray second finger just re-centers the stick where it landed.
+      if (stick.active) releaseStick();
       rec.kind = 'stick';
       stick = { active: true, id: e.pointerId, ox: x, oy: y, dx: 0, dy: 0 };
     }
   }
   pointers.set(e.pointerId, rec);
+}
+
+// Touches are implicitly captured by the element they land on, and WebKit fires
+// lostpointercapture on abnormal teardown even in some cases where pointerup never
+// arrives. No tap synthesis here: coordinates may be 0,0 and this is not a click.
+function onLost(e) {
+  if (stick.active && stick.id === e.pointerId) releaseStick();
+  const rec = pointers.get(e.pointerId);
+  if (!rec) return;
+  pointers.delete(e.pointerId);
+  if (rec.kind === 'button') held.delete(rec.action);
 }
 
 function onMove(e) {
@@ -146,6 +167,12 @@ function reconcile() {
     for (const rec of pointers.values()) if (rec.kind === 'button') live.add(rec.action);
     for (const action of [...held]) if (!live.has(action)) held.delete(action);
   }
+  // Sweep tap records whose release we never saw. Past TAP_TIME they can't become a tap
+  // anyway, and a mouse released outside the window would otherwise linger forever.
+  const now = performance.now();
+  for (const [id, rec] of pointers) {
+    if (rec.kind === 'tap' && now - rec.t0 > 5000) pointers.delete(id);
+  }
 }
 
 export function buzz(ms) {
@@ -159,6 +186,7 @@ export const touch = {
     addEventListener('pointermove', onMove, { passive: false });
     addEventListener('pointerup', onUp, { passive: false });
     addEventListener('pointercancel', onUp, { passive: false });
+    addEventListener('lostpointercapture', onLost);   // bubbles up from wherever the touch landed
     // A touch interrupted by an app switch, notification or the home-bar gesture never
     // gets a pointerup, so drop everything when we lose the foreground.
     addEventListener('blur', releaseAll);

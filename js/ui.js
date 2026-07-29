@@ -6,6 +6,7 @@ import { drawText, textWidth } from './font.js';
 import { REGION_KEYS } from './worldgen.js';
 import { T } from './tiles.js';
 import { touch, STICK, PAD_BUTTONS, TOP_BUTTONS } from './touch.js';
+import { VERSION } from './version.js';
 
 const ARROW_SHORT = { regular: 'Plain', fire: 'Fire', ice: 'Ice', lightning: 'Bolt', bomb: 'Bomb', light: 'Light' };
 
@@ -165,6 +166,8 @@ export function drawTitle(g, ctx) {
 
   text(ctx, touch.enabled ? '- TAP TO START -' : '- PRESS E TO START -', VIEW_W / 2, 114,
     { size: 9, align: 'center', color: '#f0c83a', alpha: 0.6 + 0.4 * Math.sin(g.time * 3.5) });
+  // build stamp: lets anyone confirm at a glance which version a device is running
+  text(ctx, 'v' + VERSION, VIEW_W - 4, 4, { size: 7, align: 'right', alpha: 0.55 });
   if (touch.enabled) {
     text(ctx, 'Drag the left side to move', VIEW_W / 2, VIEW_H - 22, { size: 7, align: 'center', alpha: 0.85 });
     text(ctx, 'Buttons on the right to fight', VIEW_W / 2, VIEW_H - 13, { size: 7, align: 'center', alpha: 0.85 });
