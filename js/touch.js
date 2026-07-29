@@ -59,9 +59,34 @@ function press(action) {
   held.add(action);
 }
 
+const releaseStick = () => { stick = { active: false, id: null, ox: 0, oy: 0, dx: 0, dy: 0 }; };
+
+// Undo whatever a pointer was driving. Used on release and when evicting a stale record.
+function releasePointer(id, rec) {
+  if (!rec) return;
+  if (rec.kind === 'button') held.delete(rec.action);
+  else if (rec.kind === 'stick' && stick.id === id) releaseStick();
+}
+
+// Drop every in-flight touch. iOS never sends pointerup if a system gesture, notification
+// or app switch steals the touch, which otherwise leaves the stick jammed on.
+function releaseAll() {
+  for (const [id, rec] of pointers) releasePointer(id, rec);
+  pointers.clear();
+  held.clear();
+  pressedNow.clear();
+  releaseStick();
+}
+
 function onDown(e) {
   if (!canvas) return;
   if (e.pointerType === 'touch' || e.pointerType === 'pen') enabled = true;
+  // A recycled pointerId means we missed that pointer's release; let go of it first,
+  // otherwise its stick/button stays held for the rest of the session.
+  if (pointers.has(e.pointerId)) {
+    releasePointer(e.pointerId, pointers.get(e.pointerId));
+    pointers.delete(e.pointerId);
+  }
   const [x, y] = toInternal(e.clientX, e.clientY);
   const rec = { sx: e.clientX, sy: e.clientY, t0: performance.now(), moved: false, kind: 'tap' };
 
@@ -95,16 +120,28 @@ function onMove(e) {
 }
 
 function onUp(e) {
+  // Release the stick on id match no matter what, before any early return: a release must
+  // never be able to leave it running.
+  if (stick.active && stick.id === e.pointerId) releaseStick();
   const rec = pointers.get(e.pointerId);
   if (!rec) return;
   pointers.delete(e.pointerId);
   if (rec.kind === 'button') {
     held.delete(rec.action);
-  } else if (rec.kind === 'stick') {
-    if (stick.id === e.pointerId) stick = { active: false, id: null, ox: 0, oy: 0, dx: 0, dy: 0 };
-  } else if (!rec.moved && performance.now() - rec.t0 < TAP_TIME) {
+  } else if (rec.kind === 'tap' && !rec.moved && performance.now() - rec.t0 < TAP_TIME) {
     const [x, y] = toInternal(e.clientX, e.clientY);
     taps.push({ x, y });
+  }
+}
+
+// Last line of defence, run every frame: if the pointer driving the stick (or a button) is
+// no longer tracked, whatever it was holding is stale — let go.
+function reconcile() {
+  if (stick.active && !pointers.has(stick.id)) releaseStick();
+  if (held.size) {
+    const live = new Set();
+    for (const rec of pointers.values()) if (rec.kind === 'button') live.add(rec.action);
+    for (const action of [...held]) if (!live.has(action)) held.delete(action);
   }
 }
 
@@ -119,6 +156,11 @@ export const touch = {
     addEventListener('pointermove', onMove, { passive: false });
     addEventListener('pointerup', onUp, { passive: false });
     addEventListener('pointercancel', onUp, { passive: false });
+    // A touch interrupted by an app switch, notification or the home-bar gesture never
+    // gets a pointerup, so drop everything when we lose the foreground.
+    addEventListener('blur', releaseAll);
+    addEventListener('pagehide', releaseAll);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAll(); });
     // long-press menus and selection get in the way of a game
     addEventListener('contextmenu', (e) => { if (enabled) e.preventDefault(); });
   },
@@ -129,7 +171,7 @@ export const touch = {
     padActive = v;
     if (!v) {
       held.clear();
-      stick = { active: false, id: null, ox: 0, oy: 0, dx: 0, dy: 0 };
+      releaseStick();
       for (const [id, rec] of pointers) if (rec.kind !== 'tap') pointers.delete(id);
     }
   },
@@ -154,11 +196,11 @@ export const touch = {
     return out;
   },
 
-  endFrame() { pressedNow.clear(); },
+  endFrame() { pressedNow.clear(); reconcile(); },
 
   get enabled() { return enabled; },
   get padActive() { return padActive; },
   get stickState() { return stick; },
   // a keyboard user on a touchscreen laptop shouldn't see thumb controls
-  hide() { if (enabled) { enabled = false; held.clear(); stick.active = false; } },
+  hide() { if (enabled) { enabled = false; releaseAll(); } },
 };
