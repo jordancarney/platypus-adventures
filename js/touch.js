@@ -20,9 +20,12 @@ export const PAD_BUTTONS = [
   { action: 'cycleR', x: 378, y: 118, r: 12, icon: 'arrow' },
 ];
 
+// Spaced 40px apart so the padded hit zones (r + HIT_PAD = 18) can't overlap.
+// Away from the thumb-rest zones on purpose: these are deliberate presses, not combat.
 export const TOP_BUTTONS = [
+  { action: 'teleport', x: 144, y: 13, r: 11, icon: 'warp' },
   { action: 'map', x: 184, y: 13, r: 11, icon: 'M' },
-  { action: 'pause', x: 210, y: 13, r: 11, icon: 'pause' },
+  { action: 'pause', x: 224, y: 13, r: 11, icon: 'pause' },
 ];
 
 const HIT_PAD = 7;          // extra forgiveness around each button

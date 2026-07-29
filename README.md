@@ -55,6 +55,7 @@ of running them through Jekyll.
 | Shield (hold) | L / C / Shift |
 | Swap arrow type | Q / R (or 1–6) |
 | Interact / talk / open | E / Enter |
+| Warp home (hold ~1.6s) | T / H |
 | World map | M |
 | Pause | Esc / P |
 | Mute | O |
@@ -69,7 +70,8 @@ if you use a keyboard — so a touchscreen laptop gets whichever you're actually
 - **Sword**: bottom-right. *Hold* it to keep swinging at full speed — no mashing.
 - **Bow / Shield / Interact / Swap arrows**: the surrounding buttons. Buttons for gear you
   haven't found yet stay hidden. The swap button is tinted with your current arrow's colour.
-- **Map / Pause**: the two small buttons at the top.
+- **Warp home / Map / Pause**: the three small buttons at the top. The warp button must be
+  *held* — a ring fills around it as it charges, so it can't fire by accident.
 - Move, attack, and block all work at once (multi-touch).
 - **Menus** are fully tappable: tap a shop row to select it, tap again (or **BUY**) to
   purchase, **X** to close. Tap anywhere to advance dialogue or dismiss the map.
@@ -86,6 +88,9 @@ works too, just smaller. Add it to your home screen for a fullscreen, browser-ch
 - Each elemental dungeon awards its **arrow type** (fire/ice/lightning/bomb) plus a **Key Shard**.
 - **Light Arrows** (found in the final dungeon) are the strongest — every predator fears them.
 - Enemies grow stronger with every dungeon you clear; shiny **elite** variants drop extra loot.
+- **Lost, stuck, or nearly dead?** Hold **T** (or the warp button on touch) for about a second
+  and a half to teleport back to Billabong Village — works from inside dungeons and even
+  mid-boss-fight. Let go before it fills to cancel.
 - Save at the village statue (it also fully heals you). Progress auto-saves at key moments.
 - **Three save files.** The file-select screen shows each one's full loadout — Gus wearing his
   armor, gear levels, arrow types owned, coins, diamonds, hearts, shards and dungeons cleared —

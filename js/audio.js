@@ -72,6 +72,9 @@ const SFX = {
   denied: () => { tone({ f: 220, dur: 0.09, type: 'square', vol: 0.3 }); tone({ f: 165, dur: 0.18, type: 'square', vol: 0.3, at: 0.1 }); },
   save:   () => { tone({ f: 587, dur: 0.08, type: 'triangle', vol: 0.35 }); tone({ f: 880, dur: 0.2, type: 'triangle', vol: 0.35, at: 0.09 }); },
   shard:  () => { [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => tone({ f, dur: 0.16, type: 'square', vol: 0.3, at: i * 0.09 })); },
+  warp:   () => { noise({ dur: 0.5, vol: 0.3 }); [440, 660, 990, 1480, 2100].forEach((f, i) => tone({ f, f2: f * 1.6, dur: 0.2, type: 'triangle', vol: 0.3, at: i * 0.06 })); },
+  warpIn: () => { [2100, 1480, 990, 660].forEach((f, i) => tone({ f, f2: f * 0.7, dur: 0.14, type: 'triangle', vol: 0.26, at: i * 0.05 })); noise({ dur: 0.3, vol: 0.18 }); },
+  warpOff:() => tone({ f: 420, f2: 150, dur: 0.16, type: 'triangle', vol: 0.22 }),
   fanfare:() => { [392, 392, 392, 523, 659, 784].forEach((f, i) => tone({ f, dur: i === 5 ? 0.4 : 0.11, type: 'square', vol: 0.32, at: i * 0.11 })); },
   stairs: () => { [700, 560, 450, 360].forEach((f, i) => tone({ f, dur: 0.09, type: 'triangle', vol: 0.3, at: i * 0.07 })); },
 };
@@ -146,6 +149,11 @@ export const audio = {
     addEventListener('pointerdown', unlock);
   },
   sfx(name) { if (!ctx || muted) return; (SFX[name] || SFX.blip)(); },
+  // rising pitch as the warp charges, so the hold has audible progress
+  chargeTone(prog) {
+    if (!ctx || muted) return;
+    tone({ f: 320 + prog * 900, f2: 380 + prog * 1000, dur: 0.13, type: 'triangle', vol: 0.16 });
+  },
   music(name) { if (!ctx) { setTimeout(() => ctx && this.music(name), 300); return; } if (current !== name) startSequencer(name); },
   stopMusic: stopSequencer,
   toggleMute() { muted = !muted; return muted; },

@@ -1,5 +1,5 @@
 // HUD, title screen, dialogs, shop, shrine, map, pause, banners, death, credits.
-import { VIEW_W, VIEW_H, ARROW_TYPES, ARROWS, SHOP_ITEMS, VESSEL_COSTS, REGION_NAMES } from './config.js';
+import { VIEW_W, VIEW_H, ARROW_TYPES, ARROWS, SHOP_ITEMS, VESSEL_COSTS, REGION_NAMES, TELEPORT } from './config.js';
 import { clamp } from './util.js';
 import { drawSprite } from './pixelart.js';
 import { drawText, textWidth } from './font.js';
@@ -545,13 +545,14 @@ export function drawPause(g, ctx) {
     const rows = [
       ['Move', 'WASD / Arrows'], ['Sword', 'Space / J / Z'], ['Bow', 'K / X'],
       ['Shield (hold)', 'L / C / Shift'], ['Swap arrow', 'Q / R or 1-6'],
-      ['Interact', 'E / Enter'], ['Map', 'M'], ['Mute', 'O'],
+      ['Interact', 'E / Enter'], ['Warp home', 'T / H (hold)'],
+      ['Map', 'M'], ['Mute', 'O'],
     ];
     rows.forEach(([a, b], i) => {
-      text(ctx, a, 110, 74 + i * 12, { size: 7, color: '#a8d8c0' });
-      text(ctx, b, 196, 74 + i * 12, { size: 7 });
+      text(ctx, a, 110, 72 + i * 12, { size: 7, color: '#a8d8c0' });
+      text(ctx, b, 196, 72 + i * 12, { size: 7 });
     });
-    text(ctx, 'Esc: back', VIEW_W / 2, 178, { size: 7, align: 'center', alpha: 0.8 });
+    text(ctx, 'Esc: back', VIEW_W / 2, 180, { size: 7, align: 'center', alpha: 0.8 });
     return;
   }
   const opts = ['Resume', 'Controls', `Sound: ${g.muted ? 'OFF' : 'ON'}`, 'Save & Quit'];
@@ -623,6 +624,16 @@ function buttonIcon(ctx, icon, cx, cy, color) {
       ctx.fillRect(cx - 4, cy - 5, 3, 10);
       ctx.fillRect(cx + 1, cy - 5, 3, 10);
       break;
+    case 'warp':                                    // portal: broken rings around a core
+      for (const [rr, phase] of [[6, 0], [3, 0.45]]) {
+        for (let i = 0; i < 8; i++) {
+          if (i % 2) continue;
+          const a = (i / 8) * Math.PI * 2 + phase;
+          ctx.fillRect(cx + Math.round(Math.cos(a) * rr) - 1, cy + Math.round(Math.sin(a) * rr) - 1, 2, 2);
+        }
+      }
+      ctx.fillRect(cx - 1, cy - 1, 2, 2);
+      break;
     default:                                        // a letter
       drawText(ctx, icon, cx, cy - 3, { scale: 1, color, align: 'center', shadow: false });
   }
@@ -669,7 +680,20 @@ export function drawTouchControls(g, ctx) {
     const tint = b.action === 'cycleR' ? ARROWS[st.arrowSel].color : '#f0ead8';
     drawPadButton(ctx, b, touch.down(b.action), tint);
   }
-  for (const b of TOP_BUTTONS) drawPadButton(ctx, b, touch.down(b.action));
+  for (const b of TOP_BUTTONS) {
+    drawPadButton(ctx, b, touch.down(b.action));
+    // the warp button wears its own charge meter so the hold has visible progress
+    if (b.action === 'teleport' && g.warpT > 0) {
+      const p = clamp(g.warpT / TELEPORT.hold, 0, 1);
+      ctx.save();
+      ctx.strokeStyle = '#c8a0ff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r + 2, -Math.PI / 2, -Math.PI / 2 + p * Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
 }
 
 export function drawPortraitHint(g, ctx) {

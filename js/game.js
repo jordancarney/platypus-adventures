@@ -1,5 +1,5 @@
 // Game orchestration: modes, areas, camera, spawning, combat, triggers, economy.
-import { VIEW_W, VIEW_H, TILE, SWORD_DMG, ARROWS, ARROW_TYPES, VESSEL_COSTS, CRAYFISH_HEAL, PLAYER, DEBUG } from './config.js';
+import { VIEW_W, VIEW_H, TILE, SWORD_DMG, ARROWS, ARROW_TYPES, VESSEL_COSTS, CRAYFISH_HEAL, PLAYER, TELEPORT, DEBUG } from './config.js';
 import { clamp, dist, aabb, lerp } from './util.js';
 import { T, drawTileTo, buildTileAtlas } from './tiles.js';
 import { buildOverworld, REGION, LM } from './worldgen.js';
@@ -53,6 +53,7 @@ export class Game {
     this.taps = [];
     this.portraitHintT = 0;
     this.wasPortrait = false;
+    this.warpT = 0;         // seconds the warp-home button has been held
     this.slot = 0;          // which save file is in play
     this.slots = [];        // cached slot summaries for the file-select screen
     this.fileErase = null;  // slot index awaiting erase confirmation
@@ -129,6 +130,7 @@ export class Game {
     this.curRoom = null;
     this.slide = null;
     this.dungeonDoors = [];
+    this.warpT = 0;
     this.flash = 0.35;
 
     const start = pos || this.area.playerStart;
@@ -764,10 +766,107 @@ export class Game {
       if (near) near.interact(this);
     }
 
+    this.updateWarp(dt);
+
     if (input.pressed('map')) { this.mode = 'map'; audio.sfx('blip'); }
     if (input.pressed('pause')) { this.mode = 'pause'; this.menuSel = 0; this.pausePage = null; audio.sfx('blip'); }
     this.updateCamera(dt);
     this.debugKeys();
+  }
+
+  // ------------------------------------------------ warp home
+  updateWarp(dt) {
+    if (input.down('teleport')) {
+      const was = this.warpT;
+      this.warpT = Math.min(TELEPORT.hold, this.warpT + dt);
+      const p = this.warpT / TELEPORT.hold;
+      // sparks spiral inward, faster and thicker as the charge builds
+      const rate = 0.35 + p * 1.4;
+      for (let i = 0; i < 3; i++) {
+        if (Math.random() > rate / 3) continue;
+        const a = Math.random() * Math.PI * 2;
+        const r = 40 - p * 16;
+        const sx = this.player.cx + Math.cos(a) * r;
+        const sy = this.player.cy + Math.sin(a) * r * 0.62;
+        const spd = 45 + p * 110;
+        this.addParticle(sx, sy, Math.random() < 0.5 ? '#c8a0ff' : '#7ad4ff',
+          0.3 + Math.random() * 0.2, -Math.cos(a) * spd, -Math.sin(a) * spd * 0.62,
+          Math.random() < 0.35 ? 2 : 1);
+      }
+      // audible ladder: one rising note per fifth of the charge
+      const step = TELEPORT.hold / 5;
+      if (Math.floor(this.warpT / step) > Math.floor(was / step)) audio.chargeTone(p);
+      if (this.warpT >= TELEPORT.hold) this.warpHome();
+    } else if (this.warpT > 0) {
+      if (this.warpT > TELEPORT.cancelBlipAfter) audio.sfx('warpOff');
+      this.warpT = 0;
+    }
+  }
+
+  warpHome() {
+    this.warpT = 0;
+    audio.sfx('warp');
+    this.shake(5, 0.45);
+    this.burst(this.player.cx, this.player.cy - 4, '#c8a0ff', 20);
+    this.burst(this.player.cx, this.player.cy - 4, '#ffffff', 12);
+    const [tx, ty] = TELEPORT.dest;
+    this.loadArea('overworld', { x: tx * TILE + 8, y: ty * TILE + 8 });
+    this.mode = 'play';
+    audio.sfx('warpIn');
+    this.burst(this.player.cx, this.player.cy - 4, '#c8a0ff', 22);
+    this.burst(this.player.cx, this.player.cy - 4, '#7ad4ff', 14);
+    this.toast('Warped home to Billabong Village!');
+    this.save();
+  }
+
+  // Rune circle + light column under Gus while the warp charges (drawn in world space).
+  drawWarpCharge(ctx) {
+    const p = this.warpT / TELEPORT.hold;
+    const px = Math.round(this.player.cx), py = Math.round(this.player.bottom + 2);
+    ctx.save();
+    // light column rising off him, with a hot core
+    const h = 26 + 58 * p;
+    const w = 5 + 16 * p;
+    const grad = ctx.createLinearGradient(px, py - h, px, py);
+    grad.addColorStop(0, 'rgba(200,160,255,0)');
+    grad.addColorStop(1, 'rgba(200,160,255,0.8)');
+    ctx.globalAlpha = 0.4 + 0.5 * p;
+    ctx.fillStyle = grad;
+    ctx.fillRect(px - w / 2, py - h, w, h);
+    const core = ctx.createLinearGradient(px, py - h * 0.8, px, py);
+    core.addColorStop(0, 'rgba(255,255,255,0)');
+    core.addColorStop(1, 'rgba(240,230,255,0.9)');
+    ctx.globalAlpha = 0.35 + 0.55 * p;
+    ctx.fillStyle = core;
+    ctx.fillRect(px - Math.max(1, w / 5), py - h * 0.8, Math.max(2, w / 2.5), h * 0.8);
+    // three counter-rotating dashed rings that tighten and speed up as it fills
+    for (let ring = 0; ring < 3; ring++) {
+      const rad = (28 - ring * 8) * (1 - p * 0.4) + 5;
+      const spin = this.time * (2 + p * 13) * (ring % 2 ? -1 : 1);
+      ctx.globalAlpha = Math.min(1, 0.4 + 0.6 * p);
+      ctx.strokeStyle = ring % 2 ? '#8ae0ff' : '#d8b0ff';
+      ctx.lineWidth = ring === 0 ? 2 : 1;
+      ctx.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const a = spin + (i / 10) * Math.PI * 2;
+        const a2 = a + 0.32;
+        ctx.moveTo(px + Math.cos(a) * rad, py + Math.sin(a) * rad * 0.42);
+        ctx.lineTo(px + Math.cos(a2) * rad, py + Math.sin(a2) * rad * 0.42);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Screen-space vignette that closes in as the warp charges.
+  drawWarpVignette(ctx) {
+    const p = clamp(this.warpT / TELEPORT.hold, 0, 1);
+    const g2 = ctx.createRadialGradient(VIEW_W / 2, VIEW_H / 2, VIEW_H * (0.62 - 0.3 * p),
+      VIEW_W / 2, VIEW_H / 2, VIEW_H * 0.95);
+    g2.addColorStop(0, 'rgba(120,70,200,0)');
+    g2.addColorStop(1, `rgba(120,70,200,${0.28 + 0.42 * p})`);
+    ctx.fillStyle = g2;
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
   }
 
   resolveCombat() {
@@ -1108,6 +1207,9 @@ export class Game {
       }
     }
 
+    // warp runes sit on the ground, so they go under everything
+    if (this.warpT > 0 && this.player) this.drawWarpCharge(ctx);
+
     // entities y-sorted
     const drawList = [...this.ents, this.player].filter(e => e && !e.dead);
     drawList.sort((a, b) => (a.y + a.h) - (b.y + b.h));
@@ -1136,6 +1238,7 @@ export class Game {
 
     // region tint / weather
     this.drawAtmosphere(ctx);
+    if (this.warpT > 0) this.drawWarpVignette(ctx);
 
     // HUD & overlays — full-screen menus own the frame, so the HUD steps aside
     const MENU_MODES = ['shop', 'map', 'pause', 'shrine'];

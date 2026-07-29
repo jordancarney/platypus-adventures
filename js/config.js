@@ -20,6 +20,7 @@ export const KEYMAP = {
   KeyL: 'shield', KeyC: 'shield', ShiftLeft: 'shield', ShiftRight: 'shield',
   KeyQ: 'cycleL', KeyR: 'cycleR',
   KeyE: 'interact', Enter: 'interact',
+  KeyT: 'teleport', KeyH: 'teleport',
   KeyM: 'map',
   Escape: 'pause', KeyP: 'pause',
   KeyO: 'mute',
@@ -87,6 +88,14 @@ export const BOMB_RADIUS = 30;
 export const tierHp = (hp, tier) => Math.max(1, Math.round(hp * (1 + 0.38 * tier)));
 export const tierDmg = (dmg, tier) => dmg + Math.floor(tier / 2);
 export const tierCoins = (c, tier) => c + tier;
+
+// --- warp home ---
+// Held, not tapped, so it can't fire by accident mid-fight. Works from dungeons too.
+export const TELEPORT = {
+  hold: 1.6,          // seconds of holding before it fires
+  dest: [100, 112],   // Billabong Village plaza, in tiles
+  cancelBlipAfter: 0.3,
+};
 
 // --- drops ---
 export const DROPS = {
