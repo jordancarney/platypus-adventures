@@ -307,17 +307,31 @@ export class Player extends Entity {
       ctx.arc(ox + Math.cos(ang) * look.len * 0.75, oy + Math.sin(ang) * look.len * 0.75, look.w + 3, 0, 7);
       ctx.fill();
     }
-    // the blade
+    // Blade only — no hilt. A crossguard and grip at the pivot sit inside Gus's body and
+    // read as clutter, so the swing is just the arcing blade: full width at the base,
+    // tapering to a hot tip.
     ctx.globalAlpha = 1;
     ctx.translate(Math.round(ox), Math.round(oy));
     ctx.rotate(ang);
-    const L = look.len, W = look.w;
-    ctx.fillStyle = look.dark; ctx.fillRect(2, -W / 2 - 1, L - 4, W + 2);
-    ctx.fillStyle = look.core; ctx.fillRect(3, -W / 2, L - 6, W);
-    ctx.fillStyle = look.edge; ctx.fillRect(3, -W / 2, L - 6, 1);
-    ctx.fillStyle = look.edge; ctx.fillRect(L - 5, -1, 4, 2);      // tip
-    ctx.fillStyle = look.guard; ctx.fillRect(0, -W / 2 - 3, 3, W + 6);
-    ctx.fillStyle = look.grip; ctx.fillRect(-4, -1, 4, 2);
+    const L = look.len;
+    const W = look.w, Wt = Math.max(1, W - 1);         // base and tip thickness
+    const top = -(W >> 1), topT = -(Wt >> 1);
+    const b0 = 5;                                      // starts clear of his body
+    const knee = Math.round(b0 + (L - b0) * 0.6);      // where the taper begins
+    // dark silhouette so the blade reads against any background
+    ctx.fillStyle = look.dark;
+    ctx.fillRect(b0 - 1, top - 1, knee - b0 + 2, W + 2);
+    ctx.fillRect(knee, topT - 1, L - knee, Wt + 2);
+    // metal core
+    ctx.fillStyle = look.core;
+    ctx.fillRect(b0, top, knee - b0 + 1, W);
+    ctx.fillRect(knee, topT, L - knee - 1, Wt);
+    // lit leading edge running the length of it
+    ctx.fillStyle = look.edge;
+    ctx.fillRect(b0, top, knee - b0 + 1, 1);
+    ctx.fillRect(knee, topT, L - knee - 1, 1);
+    // glinting point
+    ctx.fillRect(L - 2, topT, 2, Math.max(1, Wt));
     ctx.restore();
   }
 }
