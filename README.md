@@ -92,9 +92,30 @@ works too, just smaller. Add it to your home screen for a fullscreen, browser-ch
 ## How to play
 
 - **Gus can swim** — deep water is passable (but you can't fight while paddling).
-- **Platycoins** buy sword/shield/bow/armor/arrow upgrades at Wombeau's shop.
-- **Diamonds** buy Heart Vessels at the village Diamond Shrine.
+- **Dolphins are friends.** Six of them live in the deep water — Bindi, Splash, Echo, Nari,
+  Coorong and Bubbles. They breach, trail wakes, swim alongside Gus when he takes to the
+  water, and have advice if you talk to them. They cannot be hurt by anything, and they
+  never hurt you.
+- **Platycoins** buy upgrades at Wombeau's shop. Sword, armor, shield, bow, quiver and each
+  of the 6 arrow types all upgrade to **Lv 6** — 57 purchases for a full kit. The shop only
+  ever shows the next step of each track, so the list stays short. Armor, sword **and shield**
+  tiers all change how Gus actually looks — the shield grows from a small bark round to the
+  radiant Aegis of Vale, glows from Lv3 up, and flares whenever it turns a hit away.
+- **Diamonds** buy Heart Vessels at the village Diamond Shrine — 13 of them, taking Gus from
+  3 hearts up to 16. The final **4 hearts can't be bought**: one is awarded by each elemental
+  dungeon along with its Key Shard, for a maximum of 20.
+- **The Crucible** is the colosseum just out the village's east gate. Ring the gong and fight
+  endless waves for coin and diamonds — enemies get more numerous, tougher and shinier every
+  wave, with a miniboss every 5th and a diamond payout to match. Clear a wave and you have six
+  seconds to take the stairs and bank your winnings, or stay in for the next one. Your best
+  wave is recorded. Dying ends the run, but everything you earned is already yours.
 - **Crayfish** drop from enemies and heal 2 hearts — Gus's favorite food.
+- Each elemental dungeon is sealed behind a **ward puzzle** in a courtyard on its approach —
+  you can't sneak around them, the ring wall goes all the way round. Each is a different kind:
+  the **Ember Locks** (light three eyes with arrows before the first burns out), the
+  **Windward Seals** (shoot four eyes in the order the sign gives), the **Root Wardens**
+  (push the old stones onto the old marks), and the **Tide Wardens** (beat the guardians that
+  wake when you enter). Solve one and it stays open. Signs at each courtyard tell you the rule.
 - Each elemental dungeon awards its **arrow type** (fire/ice/lightning/bomb) plus a **Key Shard**.
 - **Light Arrows** (found in the final dungeon) are the strongest — every predator fears them.
 - Enemies grow stronger with every dungeon you clear; shiny **elite** variants drop extra loot.

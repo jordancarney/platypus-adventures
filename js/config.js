@@ -36,7 +36,7 @@ export const PLAYER = {
   swimSpeed: 52,
   slowMult: 0.62,       // shallow water / mud
   baseHearts: 3,        // 1 heart = 2 hp
-  maxHearts: 12,
+  maxHearts: 20,        // 3 base + 13 bought at the shrine (to 16) + 4 from the dungeons
   iframes: 0.9,         // seconds of invulnerability after a hit
   swordCooldown: 0.32,
   swordTime: 0.18,      // active slash window
@@ -46,8 +46,10 @@ export const PLAYER = {
   baseAmmoCap: 30,
 };
 
-// sword damage by level (1-5)
-export const SWORD_DMG = [0, 1, 2, 3, 4, 6];
+export const MAX_LEVEL = 6;   // every upgrade track tops out here
+
+// sword damage by level (1-6)
+export const SWORD_DMG = [0, 1, 2, 3, 4, 6, 8];
 
 // Per-level sword visuals. Purely cosmetic — reach and damage are unchanged, so upgrading
 // reads as a visible glow-up without shifting the hitbox out from under the player.
@@ -64,9 +66,32 @@ export const SWORD_LOOK = [
     guard: '#5a3a2a', grip: '#2a1a12', trail: ['#ffc890', '#ff8a3a', '#c8501a'], trailAlpha: 0.7, glow: '#ff8a3a', spark: '#ff8a3a', sparkN: 7 },
   { name: 'Guardian Blade', len: 20, w: 4, edge: '#fffbe0', core: '#f0e08a', dark: '#a8801a',
     guard: '#f0c83a', grip: '#8a6a1a', trail: ['#ffffff', '#fff6c8', '#f0c83a', '#f0a03a'], trailAlpha: 0.85, glow: '#fff6c8', spark: '#fff6c8', sparkN: 11 },
+  { name: 'Riverlight Fang', len: 22, w: 4, edge: '#ffffff', core: '#bff4ff', dark: '#3a8fb0',
+    guard: '#7ad4ff', grip: '#2a6a8a', trail: ['#ffffff', '#ddfaff', '#7ad4ff', '#3aa8e0', '#2a6a8a'], trailAlpha: 0.95, glow: '#bff4ff', spark: '#ddfaff', sparkN: 15 },
 ];
-// flat damage reduction by armor tier (0-3); incoming damage is never reduced below 1
-export const ARMOR_REDUCE = [0, 1, 2, 3];
+// flat damage reduction by armor tier (0-6); incoming damage is never reduced below 1
+export const ARMOR_REDUCE = [0, 1, 2, 3, 4, 5, 6];
+
+// Per-level shield visuals. Sprite grows with the tier and the aura telegraphs the
+// mechanic: Lv4 is widest (wide arc), Lv5+ glow (no slow / double reflect).
+export const SHIELD_LOOK = [
+  null,
+  { name: 'Bark Shield', sprite: 'shield1', glow: null, aura: 0, spark: '#c8b48a' },
+  { name: 'Iron Shield', sprite: 'shield2', glow: null, aura: 0, spark: '#c8ccd4' },
+  { name: 'Mirror Shield', sprite: 'shield3', glow: '#dfefff', aura: 0.16, spark: '#ffffff' },
+  { name: 'Tide Bulwark', sprite: 'shield4', glow: '#5fc3c8', aura: 0.24, spark: '#8ff0f4' },
+  { name: 'Storm Wall', sprite: 'shield5', glow: '#7ad4ff', aura: 0.32, spark: '#bff4ff' },
+  { name: 'Aegis of Vale', sprite: 'shield6', glow: '#fff6c8', aura: 0.42, spark: '#ffffff' },
+];
+
+// Shield behaviour per level. Lower arc = wider block cone; slow = movement multiplier
+// while blocking; reflect = damage multiplier on bounced projectiles (0 = can't reflect).
+export const SHIELD_ARC = [1, 0.3, 0.3, 0.3, 0.05, 0.05, -0.15];
+export const SHIELD_SLOW = [1, 0.5, 0.5, 0.55, 0.65, 1, 1];
+export const SHIELD_REFLECT = [0, 0, 0, 1, 1, 1.5, 2];
+// Bow: firing cooldown multiplier and arrow speed/range multiplier per level.
+export const BOW_COOLDOWN = [1, 1, 0.85, 0.72, 0.62, 0.54, 0.46];
+export const BOW_POWER = [1, 1, 1.12, 1.25, 1.4, 1.55, 1.75];
 // shield: level 1 blocks melee/contact from the front; 2+ blocks projectiles; 3 reflects them
 
 // --- arrow types ---
@@ -105,40 +130,70 @@ export const DROPS = {
 export const CRAYFISH_HEAL = 4; // hp (2 hearts)
 
 // --- shop catalog (Wombeau's) ---
-// Each entry: id, label, desc, price (coins), and availability/apply handled in game.js
-export const SHOP_ITEMS = [
-  { id: 'sword2', label: 'Bronze Sword',   price: 100,  desc: 'Sword damage up. (Lv 2)' },
-  { id: 'sword3', label: 'River Steel',    price: 250,  desc: 'Sword damage up. (Lv 3)' },
-  { id: 'sword4', label: 'Basalt Edge',    price: 600,  desc: 'Sword damage up. (Lv 4)' },
-  { id: 'sword5', label: 'Guardian Blade', price: 1200, desc: 'The legend itself. (Lv 5)' },
-  { id: 'armor1', label: 'Reed Vest',      price: 80,   desc: 'Reduces damage by 1.' },
-  { id: 'armor2', label: 'Scale Mail',     price: 300,  desc: 'Reduces damage by 2.' },
-  { id: 'armor3', label: 'Basalt Plate',   price: 800,  desc: 'Reduces damage by 3.' },
-  { id: 'shield2', label: 'Iron Shield',   price: 120,  desc: 'Shield also blocks projectiles.' },
-  { id: 'shield3', label: 'Mirror Shield', price: 400,  desc: 'Shield reflects projectiles.' },
-  { id: 'bow2',   label: 'Hardwood Bow',   price: 150,  desc: 'Faster firing.' },
-  { id: 'bow3',   label: 'Stormwood Bow',  price: 450,  desc: 'Arrows fly faster and farther.' },
-  { id: 'quiver1', label: 'Big Quiver',    price: 80,   desc: 'Carry 50 arrows.' },
-  { id: 'quiver2', label: 'Huge Quiver',   price: 250,  desc: 'Carry 80 arrows.' },
-  { id: 'ammo',   label: '10 Arrows',      price: 15,   desc: 'A bundle of arrows.' },
-  { id: 'cray',   label: 'Crayfish Snack', price: 25,   desc: 'Heals 2 hearts on the spot.' },
-  // per-type arrow upgrades appear once the type is owned
-  { id: 'up_regular2', label: 'Arrows Lv2',    price: 40,  desc: 'Regular arrows hit harder.' },
-  { id: 'up_regular3', label: 'Arrows Lv3',    price: 120, desc: 'Regular arrows hit harder.' },
-  { id: 'up_fire2', label: 'Fire Arrows Lv2',  price: 60,  desc: 'Hotter flames.' },
-  { id: 'up_fire3', label: 'Fire Arrows Lv3',  price: 180, desc: 'Hottest flames.' },
-  { id: 'up_ice2', label: 'Ice Arrows Lv2',    price: 60,  desc: 'Deeper freeze.' },
-  { id: 'up_ice3', label: 'Ice Arrows Lv3',    price: 180, desc: 'Deepest freeze.' },
-  { id: 'up_lightning2', label: 'Lightning Lv2', price: 60,  desc: 'Stronger storms.' },
-  { id: 'up_lightning3', label: 'Lightning Lv3', price: 180, desc: 'Strongest storms.' },
-  { id: 'up_bomb2', label: 'Bomb Arrows Lv2',  price: 60,  desc: 'Bigger booms.' },
-  { id: 'up_bomb3', label: 'Bomb Arrows Lv3',  price: 180, desc: 'Biggest booms.' },
-  { id: 'up_light2', label: 'Light Arrows Lv2', price: 100, desc: 'Brighter radiance.' },
-  { id: 'up_light3', label: 'Light Arrows Lv3', price: 300, desc: 'Blinding radiance.' },
+// Every gear track runs to MAX_LEVEL. The catalog is generated from these tracks rather
+// than hand-listed: getShopList() only ever surfaces the next step of each track, so the
+// visible shop stays short even though the full catalog is ~60 entries.
+// `start` is the level the track becomes purchasable at (gear you must own first).
+export const UPGRADE_TRACKS = [
+  { key: 'sword', start: 1, steps: [
+    { lv: 2, name: 'Bronze Sword',    price: 100,  desc: 'Sword damage up.' },
+    { lv: 3, name: 'River Steel',     price: 250,  desc: 'Sword damage up.' },
+    { lv: 4, name: 'Basalt Edge',     price: 600,  desc: 'Sword damage up.' },
+    { lv: 5, name: 'Guardian Blade',  price: 1200, desc: 'A legend reforged.' },
+    { lv: 6, name: 'Riverlight Fang', price: 2400, desc: 'The apex blade.' },
+  ] },
+  { key: 'armor', start: 0, steps: [
+    { lv: 1, name: 'Reed Vest',      price: 80,   desc: 'Reduces damage by 1.' },
+    { lv: 2, name: 'Scale Mail',     price: 300,  desc: 'Reduces damage by 2.' },
+    { lv: 3, name: 'Basalt Plate',   price: 800,  desc: 'Reduces damage by 3.' },
+    { lv: 4, name: 'Tideplate',      price: 1500, desc: 'Reduces damage by 4.' },
+    { lv: 5, name: 'Stormweave',     price: 2600, desc: 'Reduces damage by 5.' },
+    { lv: 6, name: 'Guardian Aegis', price: 4200, desc: 'Reduces damage by 6.' },
+  ] },
+  { key: 'shield', start: 1, steps: [
+    { lv: 2, name: 'Iron Shield',   price: 120,  desc: 'Also blocks projectiles.' },
+    { lv: 3, name: 'Mirror Shield', price: 400,  desc: 'Reflects projectiles.' },
+    { lv: 4, name: 'Tide Bulwark',  price: 900,  desc: 'Much wider block arc.' },
+    { lv: 5, name: 'Storm Wall',    price: 1700, desc: 'Move at full speed blocking.' },
+    { lv: 6, name: 'Aegis of Vale', price: 3000, desc: 'Reflects for double damage.' },
+  ] },
+  { key: 'bow', start: 1, steps: [
+    { lv: 2, name: 'Hardwood Bow',   price: 150,  desc: 'Faster firing.' },
+    { lv: 3, name: 'Stormwood Bow',  price: 450,  desc: 'Faster, farther arrows.' },
+    { lv: 4, name: 'Silverlimb Bow', price: 950,  desc: 'Faster, farther arrows.' },
+    { lv: 5, name: 'Galewind Bow',   price: 1800, desc: 'Faster, farther arrows.' },
+    { lv: 6, name: 'Riverlight Bow', price: 3200, desc: 'The apex bow.' },
+  ] },
+  { key: 'quiver', start: 0, steps: [
+    { lv: 1, name: 'Big Quiver',     price: 80,   desc: 'Carry 45 arrows.' },
+    { lv: 2, name: 'Huge Quiver',    price: 250,  desc: 'Carry 60 arrows.' },
+    { lv: 3, name: 'Vast Quiver',    price: 550,  desc: 'Carry 80 arrows.' },
+    { lv: 4, name: 'Grand Quiver',   price: 1000, desc: 'Carry 100 arrows.' },
+    { lv: 5, name: 'Great Quiver',   price: 1700, desc: 'Carry 125 arrows.' },
+    { lv: 6, name: 'Endless Quiver', price: 2800, desc: 'Carry 150 arrows.' },
+  ] },
+];
+// arrow capacity by quiver level (0-6)
+export const AMMO_CAPS = [30, 45, 60, 80, 100, 125, 150];
+
+// Per-type arrow upgrade pricing: base cost for Lv2, scaled up each level.
+export const ARROW_UP_BASE = { regular: 40, fire: 60, ice: 60, lightning: 60, bomb: 60, light: 100 };
+export const ARROW_UP_STEP = [0, 0, 1, 3, 6, 10, 16];   // multiplier of the base per level
+export const ARROW_UP_DESC = {
+  regular: 'Sharper arrows.', fire: 'Hotter flames.', ice: 'Deeper freeze.',
+  lightning: 'Stronger storms.', bomb: 'Bigger booms.', light: 'Brighter radiance.',
+};
+
+export const CONSUMABLES = [
+  { id: 'ammo', label: '10 Arrows', price: 15, desc: 'A bundle of arrows.' },
+  { id: 'cray', label: 'Crayfish Snack', price: 25, desc: 'Heals 2 hearts on the spot.' },
 ];
 
-// Heart Vessel prices in diamonds, one per purchase (9 total → 12 hearts)
-export const VESSEL_COSTS = [4, 6, 8, 10, 12, 14, 16, 18, 20];
+// Heart Vessel prices in diamonds, one per purchase. 13 vessels take Gus from his starting
+// 3 hearts up to 16; the final 4 are earned, one per Key Shard (see HEART_PER_SHARD).
+export const VESSEL_COSTS = [4, 6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36];
+export const SHRINE_HEART_CAP = 16;   // ceiling for purchased hearts
+export const HEART_PER_SHARD = 1;     // bonus hearts per elemental dungeon cleared
 
 export const REGION_NAMES = {
   marsh: 'Willow Marsh', village: 'Billabong Village',

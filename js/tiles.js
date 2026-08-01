@@ -48,6 +48,7 @@ export const THEMES = {
   air:   { floor: '#3c4258', floor2: '#454c66', wall: '#5a6284', wallTop: '#7a84ac', accent: '#e8f0ff' },
   earth: { floor: '#3a3020', floor2: '#443826', wall: '#5a4a2e', wallTop: '#7a6642', accent: '#a8d84a' },
   nexus: { floor: '#2c2038', floor2: '#342644', wall: '#4a3462', wallTop: '#664a86', accent: '#c88aff' },
+  arena: { floor: '#c2a86c', floor2: '#d4bc80', wall: '#8a7a5e', wallTop: '#b09a78', accent: '#f0c83a' },
 };
 
 // ---------- painting ----------

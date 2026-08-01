@@ -17,6 +17,7 @@ export const LM = {
   earthGate: [30, 172],
   nexusGate: [100, 14],
   gate: [100, 44],             // confluence gate
+  arenaGate: [118, 110],       // The Crucible, just outside the village's east gate
 };
 
 export function buildOverworld() {
@@ -186,6 +187,24 @@ export function buildOverworld() {
   };
   house(92, 104); house(105, 104); house(92, 113); house(104, 113);
 
+  // --- The Crucible: a stone colosseum a short walk out the east gate ---
+  {
+    const [ax, ay] = LM.arenaGate;
+    blob(ax, ay, 5.4, (x, y) => set(x, y, T.SAND));           // sandy floor
+    for (let a = 0; a < 96; a++) {                            // stone stands ringing it
+      const ang = (a / 96) * Math.PI * 2;
+      for (const rr of [5.6, 6.4]) {
+        const x = Math.round(ax + Math.cos(ang) * rr), y = Math.round(ay + Math.sin(ang) * rr);
+        // leave a gate on the west side, facing the village
+        if (Math.cos(ang) < -0.72) continue;
+        if (inB(x, y)) set(x, y, T.WALL);
+      }
+    }
+    for (let dy = -1; dy <= 1; dy++) set(ax - 6, ay + dy, T.SAND);   // entry tunnel
+    for (let dy = -1; dy <= 1; dy++) set(ax - 5, ay + dy, T.SAND);
+    set(ax, ay, T.STAIRS);
+  }
+
   // --- dungeon entrances ---
   const clearing = (cx, cy, rad, ground, ring) => {
     blob(cx, cy, rad, (x, y) => set(x, y, ground));
@@ -253,6 +272,9 @@ export function buildOverworld() {
     { kind: 'sign', tx: 112, ty: 113, text: 'SE: Mistfall Lagoon.|The Sunken Grotto lies on the island. Platypuses can swim!' },
     { kind: 'sign', tx: 88, ty: 109, text: 'W, then N: Skyreach Bluffs.|The Tempest Spire pierces the clouds.' },
     { kind: 'sign', tx: 88, ty: 113, text: 'SW: Rootdeep Forest.|The Barrow swallows the unwary.' },
+    { kind: 'dungeon', tx: LM.arenaGate[0], ty: LM.arenaGate[1], id: 'arena' },
+    // on the arena sand, clear of the two directional signs by the east gate
+    { kind: 'sign', tx: 115, ty: 107, text: 'THE CRUCIBLE.|Survive the waves. Coin and diamonds|to those still standing.' },
     // sits in the wall opening itself (rows 44-45), not floating north of it
     { kind: 'gate', tx: 100, ty: 44, id: 'gate' },
     { kind: 'dungeon', tx: LM.fireGate[0], ty: LM.fireGate[1], id: 'fire' },
@@ -265,6 +287,106 @@ export function buildOverworld() {
     { kind: 'sign', tx: 28, ty: 27, text: 'The Tempest Spire.|The winds bow to Galestrike.' },
     { kind: 'sign', tx: 32, ty: 175, text: 'The Rootdeep Barrow.|The King Below is listening.' },
   ];
+  // --- warded approaches: a sealed ring around each elemental dungeon with one gated
+  // doorway, and a puzzle courtyard on the road outside it. The ring is what actually
+  // gates; the courtyard is just where the puzzle lives.
+  const puzzles = [];
+  const ward = (cfg) => {
+    const [cx, cy] = cfg.gate, R = 7;
+    const [fx, fy] = cfg.dir;              // points from the dungeon out toward the road
+    const [rx, ry] = [-fy, fx];            // perpendicular
+    const at = (fwd, side) => [cx + fx * fwd + rx * side, cy + fy * fwd + ry * side];
+
+    // clear the interior so the walk from doorway to stairs is open
+    blob(cx, cy, R - 1, (x, y) => { if (isSolid(get(x, y)) || props(get(x, y)).deep) set(x, y, cfg.ground); });
+    // two-tile-thick ring, with a gap left where the doorway goes
+    const openAng = Math.atan2(fy, fx);
+    for (let a = 0; a < 320; a++) {
+      const ang = (a / 320) * Math.PI * 2;
+      const off = Math.abs(((ang - openAng + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+      if (off < 0.24) continue;
+      for (const rr of [R, R + 1]) {
+        const x = Math.round(cx + Math.cos(ang) * rr), y = Math.round(cy + Math.sin(ang) * rr);
+        if (inB(x, y)) set(x, y, cfg.wall);
+      }
+    }
+    // doorway: sealed until the puzzle is solved
+    const doors = [];
+    for (let side = -1; side <= 1; side++) {
+      for (const d of [R, R + 1]) {
+        const [x, y] = at(d, side);
+        set(x, y, T.DOOR_SHUT);
+        doors.push([x, y]);
+      }
+    }
+    // approach lane and courtyard floor
+    for (let d = R + 2; d <= R + 10; d++) for (let side = -2; side <= 2; side++) {
+      const [x, y] = at(d, side);
+      if (inB(x, y)) set(x, y, cfg.ground);
+    }
+    const els = cfg.build(at, cfg);
+    puzzles.push({ id: cfg.id, kind: cfg.kind, doors, ground: cfg.ground, limit: cfg.limit, ...els });
+  };
+
+  ward({
+    id: 'fire', gate: LM.fireGate, dir: [0, 1], ground: T.ASH, wall: T.BASALT, kind: 'timed', limit: 6,
+    build: (at) => {
+      const eyes = [[10, -3], [12, 0], [10, 3]].map(([f, s]) => at(f, s));
+      eyes.forEach(([x, y]) => set(x, y, T.EYE));
+      propList.push({ kind: 'sign', tx: at(13, -3)[0], ty: at(13, -3)[1],
+        text: 'THE EMBER LOCKS.|Three eyes, one breath. Light them all|before the first burns out.' });
+      return { eyes };
+    },
+  });
+  ward({
+    id: 'air', gate: LM.airGate, dir: [0, 1], ground: T.PATH, wall: T.MESA, kind: 'sequence',
+    build: (at) => {
+      // ordered left-to-right on the ground, but the sign names the order to shoot
+      const eyes = [[10, -3], [10, -1], [10, 1], [10, 3]].map(([f, s]) => at(f, s));
+      eyes.forEach(([x, y]) => set(x, y, T.EYE));
+      propList.push({ kind: 'sign', tx: at(13, -4)[0], ty: at(13, -4)[1],
+        text: 'THE WINDWARD SEALS.|The gale reads right to left,|then the two it skipped. 4-2-3-1.' });
+      return { eyes, order: [3, 1, 2, 0], step: 0 };
+    },
+  });
+  ward({
+    id: 'earth', gate: LM.earthGate, dir: [1, 0], ground: T.DARKGRASS, wall: T.PINE, kind: 'blocks',
+    build: (at) => {
+      const plates = [[9, -2], [9, 2]].map(([f, s]) => at(f, s));
+      plates.forEach(([x, y]) => set(x, y, T.PLATE));
+      const blocks = [[12, -2], [12, 2]].map(([f, s]) => at(f, s));
+      blocks.forEach(([x, y]) => propList.push({ kind: 'block', tx: x, ty: y }));
+      propList.push({ kind: 'sign', tx: at(13, 0)[0], ty: at(13, 0)[1],
+        text: 'THE ROOT WARDENS.|The old stones must sit on the old|marks. Push them home.' });
+      return { plates, blocks };
+    },
+  });
+  ward({
+    id: 'water', gate: LM.waterGate, dir: [-1, 0], ground: T.SAND, wall: T.ROCK, kind: 'killall',
+    build: (at) => {
+      const spawns = [[10, -3], [11, 0], [10, 3], [13, -1]].map(([f, s]) => at(f, s));
+      propList.push({ kind: 'sign', tx: at(9, 3)[0], ty: at(9, 3)[1],
+        text: 'THE TIDE WARDENS.|Guardians wake for those who|would pass. Best them all.' });
+      return { spawns, types: ['snapshell', 'rakali', 'snapshell', 'adder'], armed: false, trigger: at(11, 0) };
+    },
+  });
+
+  // --- friendly dolphins: snapped to genuine deep water near each wish spot, since the
+  // lagoon and river are generated with noise and a hardcoded tile may land on sand ---
+  const DOLPHINS = [
+    [162, 168, 'Bindi'], [172, 174, 'Splash'], [158, 180, 'Echo'],
+    [168, 164, 'Nari'], [131, 120, 'Coorong'], [120, 90, 'Bubbles'],
+  ];
+  DOLPHINS.forEach(([nx, ny, name], i) => {
+    let best = null, bestD = Infinity;
+    for (let y = ny - 12; y <= ny + 12; y++) for (let x = nx - 12; x <= nx + 12; x++) {
+      if (!inB(x, y) || get(x, y) !== T.DEEP) continue;
+      const d = dist(x, y, nx, ny);
+      if (d < bestD) { bestD = d; best = [x, y]; }
+    }
+    if (best) propList.push({ kind: 'dolphin', tx: best[0], ty: best[1], name, line: i });
+  });
+
   // scattered treasure chests (some walled behind cracked rocks = bomb arrows)
   const chestSpots = [
     [70, 60, { coins: 60 }, false], [130, 130, { coins: 80 }, false], [58, 120, { ammo: 15 }, false],
@@ -296,7 +418,9 @@ export function buildOverworld() {
   const tooClose = (x, y) =>
     (Math.abs(x - 100) < 16 && Math.abs(y - 110) < 12) ||        // village
     dist(x, y, ...LM.start) < 15 ||
-    ['fireGate', 'waterGate', 'airGate', 'earthGate', 'nexusGate'].some(k => dist(x, y, ...LM[k]) < 7) ||
+    // keep wandering enemies out of the puzzle courtyards and the arena grounds
+    ['fireGate', 'waterGate', 'airGate', 'earthGate', 'nexusGate'].some(k => dist(x, y, ...LM[k]) < 19) ||
+    dist(x, y, ...LM.arenaGate) < 9 ||
     spawners.some(s => dist(x, y, s.tx, s.ty) < 4);
   for (const [rgKey, count] of Object.entries(COUNTS)) {
     const rgId = Number(rgKey);
@@ -325,7 +449,7 @@ export function buildOverworld() {
     id: 'overworld', type: 'overworld', theme: 'ow',
     w: W, h: H, tiles, region,
     get, set, regionAt: reg,
-    spawners, props: propList,
+    spawners, props: propList, puzzles,
     playerStart: { x: LM.start[0] * TILE + 8, y: (LM.start[1] + 2) * TILE + 8 },
   };
 }

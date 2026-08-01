@@ -1,10 +1,12 @@
 // Game orchestration: modes, areas, camera, spawning, combat, triggers, economy.
-import { VIEW_W, VIEW_H, TILE, SWORD_DMG, ARROWS, ARROW_TYPES, VESSEL_COSTS, CRAYFISH_HEAL, PLAYER, TELEPORT, DEBUG } from './config.js';
+import { VIEW_W, VIEW_H, TILE, SWORD_DMG, ARROWS, ARROW_TYPES, VESSEL_COSTS, HEART_PER_SHARD,
+  CRAYFISH_HEAL, AMMO_CAPS, MAX_LEVEL, SHIELD_REFLECT, PLAYER, TELEPORT, DEBUG } from './config.js';
 import { clamp, dist, aabb, lerp } from './util.js';
 import { T, drawTileTo, buildTileAtlas } from './tiles.js';
 import { buildOverworld, REGION, LM } from './worldgen.js';
 import { buildDungeon } from './dungeons.js';
-import { Player, Arrow, Pickup, Chest, Pot, PushBlock, Prop, moveEntity } from './entities.js';
+import * as arena from './arena.js';
+import { Player, Arrow, Pickup, Chest, Pot, PushBlock, Prop, Dolphin, DOLPHIN_LINES, moveEntity } from './entities.js';
 import { makeEnemy } from './enemies.js';
 import { saveSlot, loadSlot, clearSlot, listSlots, SLOTS } from './save.js';
 import { input } from './input.js';
@@ -13,7 +15,7 @@ import { touch } from './touch.js';
 import * as ui from './ui.js';
 
 const REGION_MUSIC = ['marsh', 'fire', 'water', 'air', 'earth', 'confluence', 'village'];
-const GATE_KEYS = { fire: 'fireGate', water: 'waterGate', air: 'airGate', earth: 'earthGate', nexus: 'nexusGate' };
+const GATE_KEYS = { fire: 'fireGate', water: 'waterGate', air: 'airGate', earth: 'earthGate', nexus: 'nexusGate', arena: 'arenaGate' };
 
 export class Game {
   constructor(ctx) {
@@ -69,8 +71,8 @@ export class Game {
       coins: 0, diamonds: 0,
       sword: 0, shield: 0, bow: 0, armor: 0,
       arrows: { ammo: 0, cap: PLAYER.baseAmmoCap, types },
-      arrowSel: 'regular',
-      shards: 0, vessels: 0,
+      arrowSel: 'regular', quiver: 0,
+      shards: 0, vessels: 0, arenaBest: 0,
       dungeonsDone: {}, keys: {}, fangs: {}, flags: {},
       area: 'overworld', pos: null,
       god: false,
@@ -101,6 +103,9 @@ export class Game {
     const base = this.defaultState();
     this.state = Object.assign(base, s);
     this.state.arrows = Object.assign(this.defaultState().arrows, s.arrows || {});
+    // saves from before the 6-level tracks: derive quiver level from the stored capacity
+    if (s.quiver == null) this.state.quiver = Math.max(0, AMMO_CAPS.indexOf(this.state.arrows.cap));
+    this.state.arrows.cap = AMMO_CAPS[clamp(this.state.quiver, 0, 6)];
     this.loadArea(this.state.area || 'overworld', this.state.pos);
     this.mode = 'play';
   }
@@ -112,7 +117,9 @@ export class Game {
 
   // ------------------------------------------------ areas
   loadArea(id, pos = null) {
-    this.area = id === 'overworld' ? buildOverworld() : buildDungeon(id, this.state.flags);
+    this.area = id === 'overworld' ? buildOverworld()
+      : id === arena.ARENA_ID ? arena.buildArena()
+        : buildDungeon(id, this.state.flags);
     buildTileAtlas(this.area.theme);
     // apply persistent cracked tiles
     for (const key of Object.keys(this.state.flags)) {
@@ -131,6 +138,7 @@ export class Game {
     this.slide = null;
     this.dungeonDoors = [];
     this.warpT = 0;
+    this.arena = null;
     this.flash = 0.35;
 
     const start = pos || this.area.playerStart;
@@ -145,6 +153,9 @@ export class Game {
           break;
         }
         case 'pot': this.ents.push(new Pot(p.tx, p.ty)); break;
+        case 'dolphin':
+          this.ents.push(new Dolphin(p.tx * TILE + 8, p.ty * TILE + 8, p.name, DOLPHIN_LINES[p.line % DOLPHIN_LINES.length]));
+          break;
         case 'block': this.ents.push(new PushBlock(p.tx, p.ty)); break;
         case 'gate': if (!this.state.flags.gate_open) this.ents.push(new Prop(p)); break;
         case 'dungeon': this.dungeonDoors.push(p); break;
@@ -154,6 +165,11 @@ export class Game {
 
     for (const sp of this.area.spawners) { sp.ent = null; sp.cd = 0; }
 
+    // wards already solved stay open
+    for (const p of this.area.puzzles || []) {
+      if (this.puzzleSolved(p)) for (const [x, y] of p.doors) this.area.set(x, y, p.ground);
+    }
+
     if (this.area.type === 'overworld') {
       this.minimap = ui.buildMinimap(this.area);
       this.regionCode = -99;
@@ -162,6 +178,10 @@ export class Game {
       this.curRoom = this.area.roomAt(this.player.cx, this.player.cy);
       if (this.curRoom) { this.visitedRooms.add(this.curRoom.rx + ',' + this.curRoom.ry); this.activateRoom(this.curRoom); }
     }
+    // fresh run every visit; the record lives in the save
+    this.arena = this.area.isArena
+      ? { wave: 0, phase: 'idle', t: 0, tier: this.tier(), pending: [], lastReward: null }
+      : null;
     this.snapCamera();
   }
 
@@ -170,7 +190,10 @@ export class Game {
     this.save();
     this.loadArea(id);
     this.mode = 'play';
-    this.setBanner(this.area.name.toUpperCase(), this.tierHint(), '#c88aff');
+    const sub = this.area.isArena
+      ? `Best: wave ${this.state.arenaBest || 0}. Ring the gong to begin.`
+      : this.tierHint();
+    this.setBanner(this.area.name.toUpperCase(), sub, this.area.isArena ? '#f0c83a' : '#c88aff');
     this.save();
   }
   exitDungeon() {
@@ -250,6 +273,11 @@ export class Game {
     this.area.set(tx, ty, T.EYE_ON);
     audio.sfx('switch');
     this.burst(tx * TILE + 8, ty * TILE + 8, '#e04a5a', 6);
+    // overworld ward puzzles own their own eyes
+    const wp = (this.area.puzzles || []).find(p =>
+      !this.state.flags['puzzle_' + p.id] && p.eyes &&
+      p.eyes.some(([ex, ey]) => ex === tx && ey === ty));
+    if (wp) { this.puzzleEyeHit(wp, tx, ty); return; }
     const room = this.area.roomAt ? this.area.roomAt(tx * TILE + 8, ty * TILE + 8) : null;
     if (!room) return;
     const allOn = room.eyes.every(e => this.area.get(e.x, e.y) === T.EYE_ON);
@@ -295,8 +323,16 @@ export class Game {
       } else this.toast('Sealed shut. Only the BIG FANG opens it.');
       this.bumpCd = 0.8;
     } else if (id === T.DOOR_SHUT) {
-      this.toast('Something in this room must open it...');
-      this.bumpCd = 1.2;
+      const HINTS = {
+        timed: 'Sealed. Light every eye before the first fades.',
+        sequence: 'Sealed. The eyes must be struck in the right order.',
+        blocks: 'Sealed. The old stones belong on the old marks.',
+        killall: 'Sealed. The wardens must be bested first.',
+      };
+      const p = (this.area.puzzles || []).find(q =>
+        q.doors.some(([dx2, dy2]) => dx2 === tx && dy2 === ty));
+      this.toast(p ? HINTS[p.kind] : 'Something in this room must open it...');
+      this.bumpCd = 1.4;
     } else if (id === T.DCRACK || id === T.CRACKROCK || id === T.CRYSTAL) {
       this.toast('Cracked... a big BOOM could break it.');
       this.bumpCd = 1.4;
@@ -306,7 +342,8 @@ export class Game {
   // ------------------------------------------------ combat & effects
   spawn(e) { this.ents.push(e); return e; }
   spawnEnemy(type, x, y, opts = {}) {
-    const t = this.tier();
+    // the arena passes its own tier so waves can outscale story progress
+    const t = opts.tier != null ? opts.tier : this.tier();
     if (!opts.miniboss && !opts.elite && t >= 2 && Math.random() < 0.13 + 0.12 * (t - 2)) opts.elite = true;
     const e = makeEnemy(type, x, y, t, opts);
     this.ents.push(e);
@@ -343,11 +380,23 @@ export class Game {
     }
   }
   onShardCollected() {
-    this.state.shards++;
-    this.state.dungeonsDone[this.area.id] = true;
+    const st = this.state;
+    st.shards++;
+    st.dungeonsDone[this.area.id] = true;
     audio.sfx('shard');
-    const n = this.state.shards;
-    this.setBanner(`KEY SHARD  ${n} / 4`, n >= 4 ? 'The Great Gate awaits to the north!' : 'The predators of the Vale grow bolder...', '#7ae0f0',
+    // each elemental dungeon permanently grows Gus's heart, on top of anything bought
+    let gained = 0;
+    if (!st.flags['heart_' + this.area.id]) {
+      st.flags['heart_' + this.area.id] = true;
+      gained = HEART_PER_SHARD;
+      st.maxHp = Math.min(PLAYER.maxHearts * 2, st.maxHp + gained * 2);
+      st.hp = st.maxHp;
+      audio.sfx('heart');
+    }
+    const n = st.shards;
+    const tail = n >= 4 ? 'The Great Gate awaits to the north!' : 'The predators of the Vale grow bolder...';
+    this.setBanner(`KEY SHARD  ${n} / 4`,
+      gained ? `+${gained} heart!  ${tail}` : tail, '#7ae0f0',
       () => this.exitDungeon());
     this.save();
   }
@@ -358,7 +407,11 @@ export class Game {
   }
   respawn() {
     this.state.hp = this.state.maxHp;
-    if (this.area.type === 'dungeon') this.loadArea(this.area.id);
+    // losing in the arena ends the run and puts you out front; winnings are already banked
+    if (this.area.isArena) {
+      const [tx, ty] = LM.arenaGate;
+      this.loadArea('overworld', { x: tx * TILE + 8, y: (ty + 1) * TILE + 12 });
+    } else if (this.area.type === 'dungeon') this.loadArea(this.area.id);
     else this.loadArea('overworld', { x: 100 * TILE + 8, y: 112 * TILE + 8 });
     this.mode = 'play';
     this.save();
@@ -524,6 +577,17 @@ export class Game {
         }
         break;
       }
+      case 'gong': {
+        const A = this.arena;
+        if (!A) break;
+        if (A.phase === 'breather') { A.t = 0; break; }        // skip the breather, bring them on
+        if (A.phase !== 'idle') break;                          // mid-fight: nothing to ring
+        const best = this.state.arenaBest || 0;
+        this.openDialog('The Crucible',
+          `Fight wave after wave for coin and diamonds.|${best ? `Your best: wave ${best}.` : 'No record yet.'}|Leave down the stairs any time.`,
+          () => this.arenaStartWave(1));
+        break;
+      }
       case 'npc': this.npcDialog(d); break;
     }
   }
@@ -564,18 +628,18 @@ export class Game {
     const st = this.state;
     if (st.coins < item.price) { audio.sfx('denied'); this.toast('Not enough Platycoins!'); return; }
     st.coins -= item.price;
-    const id = item.id;
-    if (id.startsWith('sword')) st.sword = Number(id[5]);
-    else if (id.startsWith('armor')) st.armor = Number(id[5]);
-    else if (id.startsWith('shield')) st.shield = Number(id[6]);
-    else if (id.startsWith('bow')) st.bow = Number(id[3]);
-    else if (id === 'quiver1') st.arrows.cap = 50;
-    else if (id === 'quiver2') st.arrows.cap = 80;
-    else if (id === 'ammo') st.arrows.ammo = Math.min(st.arrows.cap, st.arrows.ammo + 10);
-    else if (id === 'cray') st.hp = Math.min(st.maxHp, st.hp + CRAYFISH_HEAL);
-    else if (id.startsWith('up_')) {
-      const type = id.slice(3, -1);
-      st.arrows.types[type].level = Number(id.slice(-1));
+    const [kind, a, b] = item.id.split(':');
+    if (kind === 'arrow') {
+      st.arrows.types[a].level = Number(b);
+    } else if (kind === 'quiver') {
+      st.quiver = Number(a);
+      st.arrows.cap = AMMO_CAPS[st.quiver];
+    } else if (kind === 'ammo') {
+      st.arrows.ammo = Math.min(st.arrows.cap, st.arrows.ammo + 10);
+    } else if (kind === 'cray') {
+      st.hp = Math.min(st.maxHp, st.hp + CRAYFISH_HEAL);
+    } else {
+      st[kind] = Number(a);      // sword / armor / shield / bow
     }
     audio.sfx('buy');
     this.toast('Bought ' + item.label + '!');
@@ -738,6 +802,7 @@ export class Game {
     if (this.area.type === 'overworld') {
       this.updateSpawners(dt);
       this.updateRegion();
+      this.updatePuzzles(dt);
       this.ambient(dt);
     } else {
       // room transitions
@@ -766,12 +831,185 @@ export class Game {
       if (near) near.interact(this);
     }
 
+    this.updateArena(dt);
     this.updateWarp(dt);
 
     if (input.pressed('map')) { this.mode = 'map'; audio.sfx('blip'); }
     if (input.pressed('pause')) { this.mode = 'pause'; this.menuSel = 0; this.pausePage = null; audio.sfx('blip'); }
     this.updateCamera(dt);
     this.debugKeys();
+  }
+
+  // ------------------------------------------------ ward puzzles (overworld approaches)
+  puzzleSolved(p) { return !!this.state.flags['puzzle_' + p.id]; }
+
+  puzzleResetEyes(p, noisy) {
+    for (const [x, y] of p.eyes) this.area.set(x, y, T.EYE);
+    p.step = 0;
+    p.timer = 0;
+    if (noisy) { audio.sfx('denied'); this.toast('The seals go dark. Try again.'); }
+  }
+
+  puzzleEyeHit(p, tx, ty) {
+    const i = p.eyes.findIndex(([x, y]) => x === tx && y === ty);
+    if (p.kind === 'sequence') {
+      if (i !== p.order[p.step || 0]) { this.puzzleResetEyes(p, true); return; }
+      p.step = (p.step || 0) + 1;
+      if (p.step >= p.order.length) this.solvePuzzle(p);
+      else this.toast(`${p.step} of ${p.order.length}...`);
+      return;
+    }
+    if (p.kind === 'timed') {
+      if (!p.timer || p.timer <= 0) { p.timer = p.limit; this.toast(`Quick! ${p.limit} seconds!`); }
+      if (p.eyes.every(([x, y]) => this.area.get(x, y) === T.EYE_ON)) this.solvePuzzle(p);
+    }
+  }
+
+  puzzleCheckPlates(p) {
+    let all = true;
+    for (const [px, py] of p.plates) {
+      const rect = { x: px * TILE + 2, y: py * TILE + 2, w: 12, h: 12 };
+      let covered = false;
+      for (const e of this.ents) {
+        if (e instanceof PushBlock && !e.dead && aabb(e.box(), rect)) { covered = true; break; }
+      }
+      this.area.set(px, py, covered ? T.PLATE_DOWN : T.PLATE);
+      if (!covered) all = false;
+    }
+    if (all) this.solvePuzzle(p);
+  }
+
+  solvePuzzle(p) {
+    if (this.puzzleSolved(p)) return;
+    this.state.flags['puzzle_' + p.id] = true;
+    for (const [x, y] of p.doors) this.area.set(x, y, p.ground);
+    audio.sfx('shard');
+    this.shake(4, 0.4);
+    for (const [x, y] of p.doors) this.burst(x * TILE + 8, y * TILE + 8, '#f0c83a', 8);
+    this.setBanner('THE WARD OPENS!', 'The way ahead is clear.', '#f0c83a');
+    this.save();
+  }
+
+  updatePuzzles(dt) {
+    const list = this.area.puzzles;
+    if (!list) return;
+    for (const p of list) {
+      if (this.puzzleSolved(p)) continue;
+      if (p.kind === 'timed' && p.timer > 0) {
+        p.timer -= dt;
+        if (p.timer <= 0) this.puzzleResetEyes(p, true);
+      } else if (p.kind === 'blocks') {
+        this.puzzleCheckPlates(p);
+      } else if (p.kind === 'killall') {
+        if (!p.armed) {
+          // guardians wake when Gus steps into the courtyard
+          if (dist(this.player.cx, this.player.cy, p.trigger[0] * TILE + 8, p.trigger[1] * TILE + 8) < 70) {
+            p.armed = true;
+            audio.sfx('roar');
+            this.toast('The wardens stir!');
+            p.spawns.forEach(([x, y], i) => {
+              const e = this.spawnEnemy(p.types[i % p.types.length], x * TILE + 8, y * TILE + 8, {});
+              e.puzzleId = p.id;
+            });
+          }
+        } else if (!this.ents.some(e => e.puzzleId === p.id && !e.dead)) {
+          this.solvePuzzle(p);
+        }
+      }
+    }
+  }
+
+  // ------------------------------------------------ the Crucible (wave arena)
+  arenaPad(i) {
+    const [tx, ty] = arena.PADS[i % arena.PADS.length];
+    return { x: tx * TILE + 8, y: ty * TILE + 8 };
+  }
+
+  arenaStartWave(n) {
+    const A = this.arena;
+    A.wave = n;
+    A.phase = 'countdown';
+    A.t = arena.COUNTDOWN;
+    A.tier = arena.waveTier(n, this.tier());
+    A.lastReward = null;
+    audio.sfx('roar');
+  }
+
+  arenaSpawnWave() {
+    const A = this.arena;
+    const bounds = this.roomBoundsPx(this.curRoom);
+    const pool = arena.rosterFor(A.wave);
+    const boss = arena.isMinibossWave(A.wave);
+    const n = Math.max(1, arena.fighterCount(A.wave) - (boss ? 1 : 0));
+    const chance = arena.eliteChance(A.wave);
+    A.pending = [];
+    for (let i = 0; i < n; i++) {
+      const pad = this.arenaPad(i + A.wave);
+      A.pending.push({
+        ...pad, type: pool[Math.floor(Math.random() * pool.length)],
+        elite: Math.random() < chance, t: 0.45 + i * 0.22, bounds,
+      });
+    }
+    if (boss) {
+      const [tx, ty] = arena.CENTER_PAD;
+      A.pending.push({
+        x: tx * TILE + 8, y: ty * TILE + 8, type: arena.minibossFor(A.wave),
+        elite: false, miniboss: true, t: 0.9, bounds,
+      });
+    }
+    A.phase = 'fight';
+  }
+
+  arenaWaveCleared() {
+    const A = this.arena, st = this.state;
+    const coins = arena.waveCoins(A.wave);
+    const diamonds = arena.waveDiamonds(A.wave);
+    st.coins += coins;
+    st.diamonds += diamonds;
+    st.arenaBest = Math.max(st.arenaBest || 0, A.wave);
+    A.lastReward = { coins, diamonds };
+    audio.sfx(diamonds ? 'shard' : 'fanfare');
+    this.toast(`Wave ${A.wave} cleared!  +${coins} coins${diamonds ? `  +${diamonds} diamonds` : ''}`);
+    if (A.wave % arena.HEAL_EVERY === 0) {
+      this.spawn(new Pickup(this.player.cx + 20, this.player.cy, 'crayfish'));
+    }
+    A.phase = 'breather';
+    A.t = arena.BREATHER;
+    this.save();
+  }
+
+  updateArena(dt) {
+    const A = this.arena;
+    if (!A) return;
+    A.t -= dt;
+
+    // fighters land on a telegraphed pad rather than appearing on top of you
+    for (const s of A.pending) {
+      s.t -= dt;
+      if (Math.random() < 0.6) {
+        this.addParticle(s.x + (Math.random() - 0.5) * 16, s.y + (Math.random() - 0.5) * 16,
+          '#f0c83a', 0.3, 0, -26);
+      }
+      if (s.t <= 0) {
+        this.spawnEnemy(s.type, s.x, s.y,
+          { tier: A.tier, elite: s.elite, miniboss: s.miniboss, roomBounds: s.bounds });
+        this.burst(s.x, s.y, '#f0c83a', 8);
+        s.done = true;
+      }
+    }
+    if (A.pending.length) A.pending = A.pending.filter(s => !s.done);
+
+    switch (A.phase) {
+      case 'countdown':
+        if (A.t <= 0) this.arenaSpawnWave();
+        break;
+      case 'fight':
+        if (!A.pending.length && this.enemies().length === 0) this.arenaWaveCleared();
+        break;
+      case 'breather':
+        if (A.t <= 0) this.arenaStartWave(A.wave + 1);
+        break;
+    }
   }
 
   // ------------------------------------------------ warp home
@@ -930,8 +1168,11 @@ export class Game {
             const dx = e.cx - p.cx, dy = e.cy - p.cy;
             if (fx * dx + fy * dy > 0) {
               audio.sfx('thud');
-              if (st.shield >= 3) { e.reflected = true; e.vx *= -1.3; e.vy *= -1.3; }
-              else e.dead = true;
+              p.onBlocked(this);
+              if (st.shield >= 3) {
+                e.reflected = true; e.vx *= -1.3; e.vy *= -1.3;
+                e.dmg = Math.round(e.dmg * SHIELD_REFLECT[clamp(st.shield, 0, 6)]);
+              } else e.dead = true;
               continue;
             }
           }
@@ -1108,7 +1349,7 @@ export class Game {
       if (st.diamonds >= cost) {
         st.diamonds -= cost;
         st.vessels++;
-        st.maxHp += 2;
+        st.maxHp = Math.min(PLAYER.maxHearts * 2, st.maxHp + 2);
         st.hp = st.maxHp;
         audio.sfx('heart');
         this.setBanner('+1 HEART VESSEL!', `Gus's health grows to ${st.maxHp / 2} hearts.`, '#ff9aa8');
@@ -1155,9 +1396,10 @@ export class Game {
     if (!DEBUG) return;
     const st = this.state;
     if (input.pressed('dbgGear')) {
-      st.sword = 5; st.shield = 3; st.bow = 3; st.armor = 3;
-      for (const t of ARROW_TYPES) { st.arrows.types[t].owned = true; st.arrows.types[t].level = 3; }
-      st.arrows.cap = 80; st.arrows.ammo = 80;
+      st.sword = MAX_LEVEL; st.shield = MAX_LEVEL; st.bow = MAX_LEVEL; st.armor = MAX_LEVEL;
+      for (const t of ARROW_TYPES) { st.arrows.types[t].owned = true; st.arrows.types[t].level = MAX_LEVEL; }
+      st.quiver = MAX_LEVEL;
+      st.arrows.cap = AMMO_CAPS[MAX_LEVEL]; st.arrows.ammo = st.arrows.cap;
       st.coins += 2000; st.diamonds += 60;
       this.toast('DEBUG: full gear');
     }

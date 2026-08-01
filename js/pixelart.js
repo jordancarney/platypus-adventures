@@ -114,6 +114,58 @@ DEFS.armor3 = { colors: { p: '#3a3a48', h: '#5a5a70', g: '#f0c83a' }, map: [
   '..............',
 ]};
 
+DEFS.armor4 = { colors: { t: '#2f7f86', h: '#5fc3c8', w: '#e8fbff' }, map: [
+  '..............',
+  '...tttt.......',
+  '..twwwwt......',
+  '..............',
+  '..............',
+  '..............',
+  '..ht....th....',
+  '...tttttt.....',
+  '...twwwwt.....',
+  '...thhhht.....',
+  '...twwwwt.....',
+  '...tttttt.....',
+  '....tttt......',
+  '..............',
+  '..............',
+]};
+DEFS.armor5 = { colors: { p: '#3b2a5e', h: '#6a4fa0', c: '#7ad4ff', w: '#dff6ff' }, map: [
+  '..............',
+  '...pppp.......',
+  '..pccccp......',
+  '..............',
+  '..............',
+  '..............',
+  '..hp....ph....',
+  '...pppppp.....',
+  '...pc..cp.....',
+  '...phccph.....',
+  '...pc..cp.....',
+  '...pppppp.....',
+  '....pwwp......',
+  '..............',
+  '..............',
+]};
+DEFS.armor6 = { colors: { s: '#d8d4c8', h: '#ffffff', g: '#f0c83a', c: '#7ad4ff' }, map: [
+  '...gggg.......',
+  '..gssssg......',
+  '..gwwwwg......',
+  '..............',
+  '..............',
+  '..............',
+  '..gs....sg....',
+  '...gggggg.....',
+  '...gshhsg.....',
+  '...gscsgg.....',
+  '...gshhsg.....',
+  '...gggggg.....',
+  '....gwwg......',
+  '..............',
+  '..............',
+]};
+
 DEFS.gus_swim = { colors: { ...GUS_COLORS, r: '#bfe8f2' }, map: [
   '...dddd.......',
   '..dbbbbd......',
@@ -433,8 +485,89 @@ DEFS.villager = { colors: { ...GUS_COLORS, b: '#a06a3a', l: '#d8b088' }, map: DE
 DEFS.heart = { colors: { r: '#e04a5a', h: '#ff9aa8', d: '#8a1a2a' }, map: [
   '.rr.rr.', 'rhrrrrr', 'rrrrrrr', '.rrrrr.', '..rrr..', '...r...',
 ]};
-DEFS.shield_over = { colors: { m: '#8a929c', d: '#4a525e', g: '#c8a03a' }, map: [
-  '.ddd..', 'dmmmd.', 'dmgmd.', 'dmmmd.', 'dmgmd.', 'dmmmd.', '.ddd..',
+// ---------- FRIENDS ----------
+DEFS.dolphin = { colors: { b: '#5a8ab0', d: '#33566f', l: '#cfe6f4', e: '#14202a' }, map: [
+  '........dd......',
+  '.......dbbd.....',
+  '..d....dbbbd....',
+  '.ddd..dbbbbbdd..',
+  'dbbbddbbbbbbbbd.',
+  'dbbbbbbbbbbbebbd',
+  '.dbbbllllllbbbbd',
+  '..dbllllllllbdd.',
+  '...ddddddddd....',
+]};
+
+// ---------- SHIELDS ----------
+// One per level. They grow and change material as they upgrade, and the silhouette
+// telegraphs the mechanic: Lv4 is visibly the widest (it's the wide-arc shield).
+DEFS.shield1 = { colors: { w: '#8a6a3a', d: '#5a4423', h: '#a88a5a' }, map: [
+  '.ddd..',
+  'dwwwd.',
+  'dwhwd.',
+  'dwwwd.',
+  'dwhwd.',
+  'dwwwd.',
+  '.ddd..',
+]};
+DEFS.shield2 = { colors: { m: '#8a929c', d: '#4a525e', h: '#b8c0cc', g: '#c8a03a' }, map: [
+  '.ddddd.',
+  'dmmmmmd',
+  'dmhmhmd',
+  'dmmgmmd',
+  'dmhmhmd',
+  'dmmmmmd',
+  'dmmmmmd',
+  '.ddddd.',
+]};
+DEFS.shield3 = { colors: { s: '#c8d4e0', d: '#5a6472', h: '#ffffff', b: '#8aa8c8' }, map: [
+  '.ddddd.',
+  'dsssssd',
+  'dshhssd',
+  'dshhsbd',
+  'dssssbd',
+  'dsbbssd',
+  'dssssbd',
+  'dsssssd',
+  '.ddddd.',
+]};
+DEFS.shield4 = { colors: { t: '#2f7f86', d: '#1a4a50', h: '#5fc3c8', w: '#e8fbff' }, map: [
+  '..ddddd..',
+  '.dtttttd.',
+  'ddtthttdd',
+  'dtthwhttd',
+  'dtthwhttd',
+  'dtthhhttd',
+  'ddtttttdd',
+  '.dtttttd.',
+  '..ddddd..',
+]};
+DEFS.shield5 = { colors: { p: '#3b2a5e', d: '#221640', h: '#6a4fa0', c: '#7ad4ff' }, map: [
+  '..ddddd..',
+  '.dpppppd.',
+  'ddphhhpdd',
+  'dpphcphpd',
+  'dpphcphpd',
+  'dppcccppd',
+  'dpphcphpd',
+  'dpphcphpd',
+  'ddphhhpdd',
+  '.dpppppd.',
+  '..ddddd..',
+]};
+DEFS.shield6 = { colors: { g: '#f0c83a', d: '#a8801a', w: '#ffffff', c: '#7ad4ff', s: '#fff6c8' }, map: [
+  '..dddddd..',
+  '.dggggggd.',
+  'dgssssssgd',
+  'dgswwwwsgd',
+  'dgswccwsgd',
+  'dgswccwsgd',
+  'dgswwwwsgd',
+  'dgssssssgd',
+  'dggggggggd',
+  '.dggggggd.',
+  '..dggggd..',
+  '...dddd...',
 ]};
 // The Great Gate is drawn in code rather than as an ASCII map: it has to fill the full
 // three-tile gap in the Confluence wall (48x32), which is unwieldy to hand-letter.
@@ -475,6 +608,23 @@ function buildGateSprite() {
   px(22, 19, 4, 2, GOLD_D);
   return { canvas: c, w: W, h: H };
 }
+DEFS.gong = { colors: { d: '#5a4423', s: '#a08040', g: '#f0c83a', h: '#fff0a0' }, map: [
+  'dd.........dd.',
+  'dd.........dd.',
+  'dd..sgggs..dd.',
+  'dd.sgghggs.dd.',
+  'dd.gghhhgg.dd.',
+  'dd.gghhhgg.dd.',
+  'dd.sgghggs.dd.',
+  'dd..sgggs..dd.',
+  'dd.........dd.',
+  'dd.........dd.',
+  'dd.........dd.',
+  'ddd.......ddd.',
+  '.dd.......dd..',
+  '.dddddddddd...',
+  '..dddddddd....',
+]};
 DEFS.boulder = { colors: { s: '#8a8278', d: '#5a544c', h: '#b0a89c' }, map: [
   '..ssss..', '.shhsss.', 'ssshssss', 'sssssssd', 'sssssssd', 'dssssdd.', '.dddd...',
 ]};

@@ -1,5 +1,6 @@
 // Player, projectiles, pickups, chests, props, push blocks.
-import { TILE, PLAYER, SWORD_LOOK, ARMOR_REDUCE, ARROWS, BURN, FREEZE_TIME, CHAIN_TARGETS, BOMB_RADIUS, CRAYFISH_HEAL, DROPS, tierCoins } from './config.js';
+import { TILE, PLAYER, SWORD_LOOK, SHIELD_LOOK, ARMOR_REDUCE, SHIELD_ARC, SHIELD_SLOW, BOW_COOLDOWN, BOW_POWER,
+  ARROWS, BURN, FREEZE_TIME, CHAIN_TARGETS, BOMB_RADIUS, CRAYFISH_HEAL, DROPS, tierCoins } from './config.js';
 import { clamp, aabb, dist, dirTo, DIRS } from './util.js';
 import { T, props as tileProps } from './tiles.js';
 import { drawSprite } from './pixelart.js';
@@ -35,6 +36,7 @@ export function walkable(id, e) {
   const p = tileProps(id);
   if (e.fly) return !p.solid;
   if (p.solid || p.lava) return false;
+  if (e.deepOnly) return !!p.deep;   // dolphins keep to water they can actually swim in
   if (p.deep) return !!(e.swims || e.aquatic);
   if (e.aquatic) return !!(p.deep || p.water);
   return true;
@@ -138,6 +140,7 @@ export class Player extends Entity {
     this.swordCd = Math.max(0, this.swordCd - dt);
     this.bowCd = Math.max(0, this.bowCd - dt);
     this.attackT = Math.max(0, this.attackT - dt);
+    this.blockFlash = Math.max(0, (this.blockFlash || 0) - dt);
 
     // knockback decay
     this.knockx *= Math.pow(0.0001, dt); this.knocky *= Math.pow(0.0001, dt);
@@ -161,7 +164,7 @@ export class Player extends Entity {
     }
     let speed = this.swimming ? PLAYER.swimSpeed : PLAYER.speed;
     if (tp.slow) speed *= PLAYER.slowMult;
-    if (this.blocking) speed *= 0.5;
+    if (this.blocking) speed *= SHIELD_SLOW[clamp(st.shield, 0, 6)];
     if (this.attackT > 0) speed *= 0.4;
 
     let dx = ax * speed * dt + this.knockx * dt;
@@ -222,11 +225,12 @@ export class Player extends Entity {
     if (!owned || !owned.owned) return;
     if (st.arrows.ammo < info.cost) { audio.sfx('denied'); return; }
     st.arrows.ammo -= info.cost;
-    this.bowCd = PLAYER.bowCooldown * (st.bow >= 2 ? 0.7 : 1);
+    const bl = clamp(st.bow, 0, 6);
+    this.bowCd = PLAYER.bowCooldown * BOW_COOLDOWN[bl];
     const [dx, dy] = DIRS[this.facing];
     const lvl = owned.level;
-    const range = PLAYER.arrowRange * (st.bow >= 3 ? 1.5 : 1);
-    const speed = PLAYER.arrowSpeed * (st.bow >= 3 ? 1.25 : 1);
+    const range = PLAYER.arrowRange * BOW_POWER[bl];
+    const speed = PLAYER.arrowSpeed * BOW_POWER[bl];
     g.spawn(new Arrow(this.cx + dx * 8, this.cy - 4 + dy * 8, dx, dy, type, lvl, speed, range));
     audio.sfx('arrow');
   }
@@ -238,8 +242,10 @@ export class Player extends Entity {
     if (this.blocking && !isHazard) {
       const [fx, fy] = DIRS[this.facing];
       const [tx, ty] = dirTo(this.cx, this.cy, sx, sy);
-      if (fx * tx + fy * ty > 0.3) {
+      // better shields cover a wider arc
+      if (fx * tx + fy * ty > SHIELD_ARC[clamp(g.state.shield, 0, 6)]) {
         audio.sfx('thud');
+        this.onBlocked(g);
         const [kx, ky] = dirTo(sx, sy, this.cx, this.cy);
         this.knockx = kx * 90; this.knocky = ky * 90;
         this.iframes = 0.25;
@@ -271,13 +277,48 @@ export class Player extends Entity {
     // swim sprite is a different pose
     if (st.armor > 0 && !this.swimming) drawSprite(ctx, 'armor' + st.armor, cx, by, { flip: this.flip });
 
-    // shield
-    if (this.blocking) {
-      const [fx, fy] = DIRS[this.facing];
-      drawSprite(ctx, 'shield_over', cx + fx * 8, by - 4 + fy * 6, { flip: this.facing === 'left' });
-    }
+    // shield: braced in front, with a tier aura and an impact flare when it eats a hit
+    if (this.blocking) this.drawShield(ctx, SHIELD_LOOK[clamp(st.shield, 1, 6)], cx, by, g);
     // the sword is only drawn while swinging
-    if (this.attackT > 0) this.drawSlash(ctx, SWORD_LOOK[clamp(st.sword, 1, 5)], cx);
+    if (this.attackT > 0) this.drawSlash(ctx, SWORD_LOOK[clamp(st.sword, 1, 6)], cx);
+  }
+
+  drawShield(ctx, look, cx, by, g) {
+    const [fx, fy] = DIRS[this.facing];
+    const sx = Math.round(cx + fx * 9), sy = Math.round(by - 4 + fy * 6);
+    const hit = this.blockFlash > 0 ? this.blockFlash / 0.22 : 0;
+    ctx.save();
+    // standing aura on the later shields — deliberately faint, it sits on screen the whole
+    // time you hold block and must not wash Gus out
+    if (look.aura) {
+      ctx.globalAlpha = look.aura * (0.34 + 0.12 * Math.sin(g.time * 6)) + hit * 0.14;
+      ctx.fillStyle = look.glow;
+      ctx.beginPath();
+      ctx.arc(sx, sy - 5, 6 + look.aura * 7, 0, 7);
+      ctx.fill();
+    }
+    ctx.restore();
+    drawSprite(ctx, look.sprite, sx, sy, { flip: this.facing === 'left', flash: hit > 0.8 });
+    // impact ring, expanding out from the boss of the shield
+    if (hit > 0) {
+      ctx.save();
+      ctx.globalAlpha = hit * 0.7;
+      ctx.strokeStyle = look.spark;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(sx, sy - 5, 4 + (1 - hit) * 9, 0, 7);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // Called wherever a hit is turned away, so every block reads the same.
+  onBlocked(g) {
+    const look = SHIELD_LOOK[clamp(g.state.shield, 1, 6)];
+    const [fx, fy] = DIRS[this.facing];
+    this.blockFlash = 0.22;
+    g.burst(this.cx + fx * 10, this.cy - 4 + fy * 6, look.spark, 7);
+    buzz(10);
   }
 
   drawSlash(ctx, look, cx) {
@@ -611,8 +652,108 @@ export class PushBlock extends Entity {
   draw(g, ctx) { drawSprite(ctx, 'block', this.cx, this.bottom); }
 }
 
+// ---------------------------------------------------------------- DOLPHIN (friendly)
+// team 'friend' rather than 'enemy', so every combat path in the game skips them by
+// construction — swords, arrows and blasts all filter on team === 'enemy'. hurt() is a
+// no-op too, so nothing can ever injure them even if a future code path reaches for it.
+export const DOLPHIN_LINES = [
+  "Click-click! Deep water is a road, not a wall. Paddle on through, Gus.",
+  "Crocs upriver have been grumpy. Keep that shield up, little mate.",
+  "We watched your dad swim these channels. You've got his kick.",
+  "Eee-eee! Cracked rocks hate a good bang. Remember that.",
+  "The lagoon hides more than fish. Dive where the water goes dark.",
+  "Rest a while! The Vale keeps. We'll keep watch out here.",
+];
+
+export class Dolphin extends Entity {
+  constructor(x, y, name, line) {
+    super(x - 8, y - 4, 16, 8);
+    this.team = 'friend';
+    this.aquatic = true;
+    this.deepOnly = true;     // confined to deep water by moveEntity
+    this.solid = false;       // Gus can swim straight past a friend
+    this.name = name || 'Dolphin';
+    this.line = line || DOLPHIN_LINES[0];
+    this.dir = Math.random() * Math.PI * 2;
+    this.turnT = Math.random() * 2;
+    this.leapT = 3 + Math.random() * 6;
+    this.z = 0; this.vz = 0;  // height above the water while leaping
+    this.flip = false;
+    this.bob = Math.random() * 6;
+  }
+
+  hurt() { /* dolphins are friends: they cannot be injured */ }
+
+  update(g, dt) {
+    this.bob += dt;
+    const p = g.player;
+    const near = dist(this.cx, this.cy, p.cx, p.cy);
+
+    // airborne arc
+    if (this.z > 0 || this.vz > 0) {
+      this.z += this.vz * dt;
+      this.vz -= 150 * dt;
+      if (this.z <= 0) {
+        this.z = 0; this.vz = 0;
+        audio.sfx('splash');
+        g.burst(this.cx, this.cy, '#bfe8f2', 8);
+      }
+    } else {
+      this.leapT -= dt;
+      if (this.leapT <= 0) {
+        this.leapT = 5 + Math.random() * 7;
+        this.vz = 72;                       // ~17px arc — a visible breach, not a bob
+        audio.sfx('splash');
+        g.burst(this.cx, this.cy, '#bfe8f2', 6);
+      }
+    }
+
+    // swim alongside Gus when he's in the water nearby, otherwise mill about
+    let tx, ty;
+    if (p.swimming && near < 110) {
+      const a = Math.sin(this.bob * 0.8) * 1.2;
+      tx = p.cx + Math.cos(a) * 26; ty = p.cy + Math.sin(a) * 20;
+    } else {
+      this.turnT -= dt;
+      if (this.turnT <= 0) { this.turnT = 1.5 + Math.random() * 2.5; this.dir += (Math.random() - 0.5) * 2.2; }
+      tx = this.cx + Math.cos(this.dir) * 40; ty = this.cy + Math.sin(this.dir) * 40;
+    }
+    const [dx, dy] = dirTo(this.cx, this.cy, tx, ty);
+    const spd = (p.swimming && near < 110 ? 46 : 26) * (near < 22 ? 0.3 : 1);
+    const res = moveEntity(g, this, dx * spd * dt, dy * spd * dt);
+    if (res.hitX || res.hitY) this.dir += 2.2 + Math.random();   // bounced off the shore
+    if (Math.abs(dx) > 0.15) this.flip = dx < 0;
+
+    if (Math.random() < dt * 1.6) {
+      g.addParticle(this.cx + (Math.random() - 0.5) * 12, this.cy + 3, '#bfe8f2', 0.4, 0, -8, 1);
+    }
+  }
+
+  interact(g) {
+    audio.sfx('cray');
+    g.openDialog(this.name, this.line);
+  }
+
+  draw(g, ctx) {
+    const y = this.bottom + 2 - this.z;
+    // wake ring on the surface, hidden while airborne
+    if (this.z < 2) {
+      ctx.save();
+      ctx.globalAlpha = 0.3;
+      ctx.strokeStyle = '#bfe8f2';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse(this.cx, this.bottom + 1, 9 + Math.sin(this.bob * 3) * 1.5, 3, 0, 0, 7);
+      ctx.stroke();
+      ctx.restore();
+    }
+    const rise = this.vz > 0 ? -0.35 : this.z > 0 ? 0.35 : 0;   // nose up, then down
+    drawSprite(ctx, 'dolphin', this.cx, y, { flip: this.flip, angle: rise * (this.flip ? -1 : 1) });
+  }
+}
+
 // ---------------------------------------------------------------- PROPS (sign/npc/statue/shrine/gate/dungeon entrance)
-const PROP_SPRITES = { sign: 'sign', statue: 'statue', shrine: 'shrine', gate: 'gate' };
+const PROP_SPRITES = { sign: 'sign', statue: 'statue', shrine: 'shrine', gate: 'gate', gong: 'gong' };
 export class Prop extends Entity {
   constructor(def) {
     const px = def.tx * TILE, py = def.ty * TILE;

@@ -1,5 +1,6 @@
 // HUD, title screen, dialogs, shop, shrine, map, pause, banners, death, credits.
-import { VIEW_W, VIEW_H, ARROW_TYPES, ARROWS, SHOP_ITEMS, VESSEL_COSTS, REGION_NAMES, TELEPORT } from './config.js';
+import { VIEW_W, VIEW_H, ARROW_TYPES, ARROWS, UPGRADE_TRACKS, CONSUMABLES, MAX_LEVEL,
+  ARROW_UP_BASE, ARROW_UP_STEP, ARROW_UP_DESC, VESSEL_COSTS, REGION_NAMES, TELEPORT } from './config.js';
 import { clamp } from './util.js';
 import { drawSprite } from './pixelart.js';
 import { drawText, textWidth } from './font.js';
@@ -104,9 +105,34 @@ export function drawHUD(g, ctx) {
     ctx.fillStyle = '#e04a5a';
     ctx.fillRect(VIEW_W / 2 - w / 2, VIEW_H - 14, w * clamp(b.hp / b.maxHp, 0, 1), 5);
   }
+  if (g.arena) drawArenaHUD(g, ctx);
   drawToasts(g, ctx);
   drawRegionToast(g, ctx);
   if (g.state.god) text(ctx, 'GOD', VIEW_W - 30, VIEW_H - 12, { color: '#f0c83a', size: 7 });
+}
+
+// Wave counter / countdown for the Crucible. Sits top-centre, clear of the touch buttons.
+function drawArenaHUD(g, ctx) {
+  const A = g.arena;
+  const cx = VIEW_W / 2;
+  if (A.phase === 'idle') {
+    text(ctx, 'RING THE GONG TO BEGIN', cx, 34, { size: 8, align: 'center', color: '#f0c83a' });
+    const best = g.state.arenaBest || 0;
+    if (best) text(ctx, `Best: wave ${best}`, cx, 46, { size: 7, align: 'center', alpha: 0.85 });
+    return;
+  }
+  text(ctx, 'WAVE ' + A.wave, cx, 32, { size: 12, align: 'center', color: '#f0c83a' });
+  if (A.phase === 'countdown') {
+    text(ctx, 'GET READY', cx, 50, { size: 8, align: 'center',
+      alpha: 0.5 + 0.5 * Math.sin(g.time * 10), color: '#ff9aa8' });
+  } else if (A.phase === 'fight') {
+    const left = g.enemies().length + A.pending.length;
+    text(ctx, left + (left === 1 ? ' enemy left' : ' enemies left'), cx, 50,
+      { size: 8, align: 'center', color: '#e8e0d0' });
+  } else if (A.phase === 'breather') {
+    text(ctx, 'Next wave in ' + Math.max(1, Math.ceil(A.t)), cx, 50, { size: 8, align: 'center', color: '#a8d8c0' });
+    text(ctx, 'Gong to rush it  ·  stairs to cash out', cx, 62, { size: 7, align: 'center', alpha: 0.8 });
+  }
 }
 
 function drawToasts(g, ctx) {
@@ -350,27 +376,39 @@ export function drawDialog(g, ctx) {
 }
 
 // ---------------------------------------------------------------- SHOP
-// Which catalog rows are visible/buyable right now.
+// Only the next step of each track is ever offered, so the list stays short.
+// Ids are `track:level` / `arrow:type:level`, parsed back out by buyShopItem.
+export const arrowUpPrice = (type, lv) => Math.round(ARROW_UP_BASE[type] * ARROW_UP_STEP[lv]);
+
 export function getShopList(g) {
   const st = g.state;
   const out = [];
-  for (const item of SHOP_ITEMS) {
-    const id = item.id;
-    let show = false;
-    if (id.startsWith('sword')) show = st.sword === Number(id[5]) - 1 && st.sword >= 1;
-    else if (id.startsWith('armor')) show = st.armor === Number(id[5]) - 1;
-    else if (id.startsWith('shield')) show = st.shield === Number(id[6]) - 1 && st.shield >= 1;
-    else if (id.startsWith('bow')) show = st.bow === Number(id[3]) - 1 && st.bow >= 1;
-    else if (id === 'quiver1') show = st.bow >= 1 && st.arrows.cap === 30;
-    else if (id === 'quiver2') show = st.arrows.cap === 50;
-    else if (id === 'ammo') show = st.bow >= 1;
-    else if (id === 'cray') show = true;
-    else if (id.startsWith('up_')) {
-      const type = id.slice(3, -1), lvl = Number(id.slice(-1));
-      const o = st.arrows.types[type];
-      show = !!(o && o.owned && o.level === lvl - 1);
-    }
-    if (show) out.push(item);
+  for (const tr of UPGRADE_TRACKS) {
+    const cur = tr.key === 'quiver' ? (st.quiver || 0) : st[tr.key];
+    if (cur < tr.start) continue;                    // gear not owned yet
+    if (tr.key === 'quiver' && !st.bow) continue;    // no quiver before a bow
+    const next = tr.steps.find(s => s.lv === cur + 1);
+    if (!next) continue;                             // maxed
+    out.push({
+      id: `${tr.key}:${next.lv}`, label: next.name, price: next.price,
+      desc: `${next.desc} (Lv ${next.lv} of ${MAX_LEVEL})`,
+    });
+  }
+  // one arrow upgrade per owned type
+  for (const type of ARROW_TYPES) {
+    const o = st.arrows.types[type];
+    if (!o || !o.owned || o.level >= MAX_LEVEL) continue;
+    const lv = o.level + 1;
+    out.push({
+      id: `arrow:${type}:${lv}`,
+      label: `${ARROWS[type].name.replace(' Arrows', '')} Lv${lv}`,
+      price: arrowUpPrice(type, lv),
+      desc: `${ARROW_UP_DESC[type]} (Lv ${lv} of ${MAX_LEVEL})`,
+    });
+  }
+  for (const c of CONSUMABLES) {
+    if (c.id === 'ammo' && !st.bow) continue;
+    out.push(c);
   }
   return out;
 }
@@ -418,12 +456,14 @@ export function drawShrine(g, ctx) {
   text(ctx, 'DIAMOND SHRINE', VIEW_W / 2, 64, { size: 10, align: 'center', color: '#7ae0f0' });
   drawSprite(ctx, 'shrine', VIEW_W / 2, 104);
   if (st.vessels >= VESSEL_COSTS.length) {
-    text(ctx, "Gus's heart is as big as it gets!", VIEW_W / 2, 116, { size: 8, align: 'center' });
+    text(ctx, 'The shrine has given all it can.', VIEW_W / 2, 112, { size: 8, align: 'center' });
+    text(ctx, 'The last hearts lie in the dungeons.', VIEW_W / 2, 124, { size: 7, align: 'center', color: '#a8d8c0' });
     if (touch.enabled) drawTapButton(ctx, shrineRects().close, 'X', '#e0a0a0');
   } else {
     const cost = VESSEL_COSTS[st.vessels];
     text(ctx, `Offer ${cost} diamonds for +1 heart?`, VIEW_W / 2, 112, { size: 8, align: 'center' });
-    text(ctx, `(You carry ${st.diamonds})`, VIEW_W / 2, 124, { size: 8, align: 'center', color: '#7ae0f0' });
+    text(ctx, `(You carry ${st.diamonds})  ·  ${VESSEL_COSTS.length - st.vessels} left here`,
+      VIEW_W / 2, 124, { size: 7, align: 'center', color: '#7ae0f0' });
     if (touch.enabled) {
       const r = shrineRects();
       drawTapButton(ctx, r.offer, 'OFFER', '#7ae0f0');
@@ -507,6 +547,20 @@ export function drawMap(g, ctx) {
     q.forEach(([label, done], i) => {
       text(ctx, (done ? '[x] ' : '[ ] ') + label, lx, 44 + i * 12, { size: 7, color: done ? '#8a8278' : '#f0ead8' });
     });
+  } else if (g.area.isArena) {
+    text(ctx, 'THE CRUCIBLE', VIEW_W / 2, 20, { size: 12, align: 'center', color: '#f0c83a' });
+    const A = g.arena || { wave: 0 };
+    const rows = [
+      ['Current wave', String(A.wave || '-')],
+      ['Your best', String(g.state.arenaBest || 0)],
+      ['Coins next clear', String(15 + (A.wave + 1) * 8)],
+      ['Diamonds', 'every 5th wave'],
+    ];
+    rows.forEach(([a, b], i) => {
+      text(ctx, a, 110, 60 + i * 16, { size: 8, color: '#a8d8c0' });
+      text(ctx, b, 240, 60 + i * 16, { size: 8 });
+    });
+    text(ctx, 'Take the stairs to keep your winnings.', VIEW_W / 2, 140, { size: 7, align: 'center', alpha: 0.85 });
   } else if (g.area.type === 'dungeon') {
     text(ctx, g.area.name.toUpperCase(), VIEW_W / 2, 16, { size: 10, align: 'center', color: '#f0c83a' });
     const keys = Object.keys(g.area.rooms);

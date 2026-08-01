@@ -100,6 +100,15 @@ See `js/touch.js` for layout constants and `README.md` for the player-facing sum
 
 Elite (palette-swapped, stronger) variants appear as the difficulty tier rises.
 
+### Friends
+
+Dolphins (6, in deep water) are `team: 'friend'` rather than `'enemy'`, which makes them
+untargetable *by construction* — every combat path already filters on `team === 'enemy'`,
+so no special-casing was needed in the sword, arrow or blast code. `hurt()` is additionally
+a no-op so nothing can injure them even if a future code path reaches for it, and they deal
+no contact damage. A `deepOnly` movement flag keeps them out of the shallows. They wander,
+breach with a splash, escort Gus while he swims, and talk when you press interact.
+
 ### Difficulty scaling
 
 `tier = number of dungeons completed (0–4)`. Enemy HP/damage/coin drops scale with tier,
@@ -122,6 +131,31 @@ a miniboss, an elemental arrow chest, and a boss guarding the **Key Shard**.
 5. **Nexus of Fangs** (Final, N) — all four elements combined; Light Arrows found mid-dungeon.
    Boss: **Apexus, the Primal Chimera** — five phases (fire/water/air/earth/apex), weak to Light.
 
+## Upgrades — every track runs to Lv 6
+
+The shop catalog is generated from `UPGRADE_TRACKS` rather than hand-listed (~60 entries),
+and `getShopList()` only ever offers the *next* step of each track, so the visible shop
+stays at 3-13 rows. A full kit is 57 purchases / 46,760 coins.
+
+| Track | What each level buys |
+|---|---|
+| Sword | damage 1/2/3/4/6/8 |
+| Armor | damage reduction 1-6 (a hit never drops below 1) |
+| Shield | 2 blocks projectiles · 3 reflects · 4 wide arc · 5 no slow · 6 double reflect |
+| Bow | cooldown 0.45s→0.21s, range 130→228, arrow speed 250→438 |
+| Quiver | capacity 30/45/60/80/100/125/150 |
+| Arrows | each of the 6 types levels 1-6 independently |
+
+Armor is a visible overlay at every tier: Reed Vest, Scale Mail, Basalt Plate, Tideplate,
+Stormweave, Guardian Aegis. Sword tier 6 (Riverlight Fang) adds a fifth trail layer.
+
+Shields have their own sprite per tier (Bark, Iron, Mirror, Tide Bulwark, Storm Wall, Aegis
+of Vale), growing 6x7 -> 10x12, and the silhouette telegraphs the mechanic — Lv4 is visibly
+the widest because it's the wide-arc shield. Lv3+ carry a faint pulsing aura, and every
+blocked hit fires a flare and expanding ring via `Player.onBlocked()` (shared by the melee
+and projectile block paths so both read identically). The aura is kept deliberately dim: it
+is on screen the whole time block is held, so it must not wash Gus out.
+
 ## Economy (baseline prices)
 
 - Sword L2–L5: 100 / 250 / 600 / 1200 coins
@@ -129,7 +163,41 @@ a miniboss, an elemental arrow chest, and a boss guarding the **Key Shard**.
 - Shield L2–L3: 120 / 400 coins · Bow L2–L3: 150 / 450 coins
 - Arrow levels (per type) L2/L3: regular 40/120, elemental 60/180
 - Ammo capacity: 80 / 250 coins · Crayfish snack: 25 · 10 arrows: 15
-- Heart Vessels: 4, 6, 8, 10, 12, 14, 16, 18, 20 diamonds (9 vessels → 12 hearts max)
+- Heart Vessels: 4, 6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36 diamonds
+  (13 vessels, 228 diamonds total → 16 hearts; +1 heart per Key Shard → 20 max)
+
+## Ward puzzles (dungeon approaches)
+
+Each elemental dungeon sits inside a two-tile-thick ring wall with a single gated doorway,
+so the puzzle genuinely gates rather than being walk-aroundable. The puzzle itself lives in
+a courtyard on the road just outside; the ring is the lock. Solved wards persist in
+`state.flags.puzzle_<id>` and reopen on area load.
+
+Every puzzle is solvable with **only the starting kit** (sword, shield, bow, regular arrows),
+because the dungeons can be tackled in any order — none may require another dungeon's reward.
+Two of the four (Root Wardens, Tide Wardens) need no bow at all, so a player who skipped the
+village bow chest still has a way in.
+
+| Dungeon | Ward | Mechanic |
+|---|---|---|
+| Fire | The Ember Locks | light 3 eyes within 6s or they all go dark |
+| Air | The Windward Seals | shoot 4 eyes in the order the sign gives; a mistake resets |
+| Earth | The Root Wardens | push 2 stone blocks onto 2 floor plates |
+| Water | The Tide Wardens | 4 guardians wake on entry; beat them all |
+
+## The Crucible (wave arena)
+
+A colosseum on the sand just outside the village's east gate — a coin/diamond sink-filler
+that gives the shop and shrine economies somewhere to draw from once the overworld is farmed.
+
+- Ring the gong to start at wave 1. Fighters land on telegraphed pads, never on top of you.
+- Wave N: `min(8, 2 + N/2)` fighters, roster widening at waves 4/8/13/18, elite chance
+  `(N-3) * 5%` capped at 50%, and a miniboss every 5th wave.
+- Enemy tier is `max(story tier, min(6, N/3))`, so the arena scales past story progress.
+- Rewards on clear: `15 + N*8` coins, plus `1 + N/10` diamonds on miniboss waves. A crayfish
+  drops every 3rd wave. Winnings bank immediately, so dying never costs them.
+- Six-second breather between waves: take the stairs to cash out, or ring the gong to rush
+  the next one. Best wave persists per save file.
 
 ## Tech
 
@@ -155,6 +223,7 @@ F3 = full heal, F4 = +500 coins/+50 diamonds, G = god mode.
 | `js/input.js` | keyboard + touch state → named actions |
 | `js/touch.js` | thumbstick, action buttons, menu taps, haptics |
 | `js/font.js` | 5x7 bitmap font (canvas fillText blurs when upscaled) |
+| `js/arena.js` | The Crucible: wave arena layout, roster and reward curves |
 | `js/version.js` | build version constant — bump on every deploy |
 | `js/updates.js` | polls version.js, self-refreshes stale sessions |
 | `js/audio.js` | WebAudio SFX synth + music sequencer |
