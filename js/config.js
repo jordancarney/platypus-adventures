@@ -192,7 +192,6 @@ export const CONSUMABLES = [
 // Heart Vessel prices in diamonds, one per purchase. 13 vessels take Gus from his starting
 // 3 hearts up to 16; the final 4 are earned, one per Key Shard (see HEART_PER_SHARD).
 export const VESSEL_COSTS = [4, 6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36];
-export const SHRINE_HEART_CAP = 16;   // ceiling for purchased hearts
 export const HEART_PER_SHARD = 1;     // bonus hearts per elemental dungeon cleared
 
 export const REGION_NAMES = {

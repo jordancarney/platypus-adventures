@@ -90,6 +90,26 @@ export class Game {
   }
   refreshSlots() { this.slots = listSlots(); }
 
+  // Hearts-per-shard shipped after some files had already cleared dungeons. Those saves
+  // have `dungeonsDone` set but no `heart_<id>` flag, and a cleared dungeon never respawns
+  // its shard — so without this back-fill those hearts are unreachable forever.
+  // The flag is the idempotency guard: set at collection time, so flag-absent + done can
+  // only mean an older save.
+  migrateDungeonHearts() {
+    const st = this.state;
+    let owed = 0;
+    for (const id of ['fire', 'water', 'air', 'earth']) {
+      if (!st.dungeonsDone[id] || st.flags['heart_' + id]) continue;
+      st.flags['heart_' + id] = true;
+      owed += HEART_PER_SHARD;
+    }
+    if (!owed) return;
+    st.maxHp = Math.min(PLAYER.maxHearts * 2, st.maxHp + owed * 2);
+    st.hp = st.maxHp;
+    this.toast(`The Vale repays ${owed} heart${owed > 1 ? 's' : ''} you were owed!`);
+    this.save();
+  }
+
   newGame(slot = 0) {
     this.slot = clamp(slot, 0, SLOTS - 1);
     this.state = this.defaultState();
@@ -106,6 +126,7 @@ export class Game {
     // saves from before the 6-level tracks: derive quiver level from the stored capacity
     if (s.quiver == null) this.state.quiver = Math.max(0, AMMO_CAPS.indexOf(this.state.arrows.cap));
     this.state.arrows.cap = AMMO_CAPS[clamp(this.state.quiver, 0, 6)];
+    this.migrateDungeonHearts();
     this.loadArea(this.state.area || 'overworld', this.state.pos);
     this.mode = 'play';
   }
