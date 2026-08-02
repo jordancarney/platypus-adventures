@@ -2,9 +2,9 @@
 
 ### ▶ [Play it](https://jordancarney.github.io/platypus-adventures/)
 
-An open-world action-adventure in the spirit of classic Zelda, starring **Gus the Platypus**.
-Pure vanilla JavaScript + HTML5 Canvas. No dependencies, no build step — every sprite, tile
-and sound is generated in code.
+A game my kid is making, inspired by classic Zelda and his love of platypuses. An open-world
+action-adventure starring **Gus the Platypus**. Pure vanilla JavaScript + HTML5 Canvas. No
+dependencies, no build step — every sprite, tile and sound is generated in code.
 
 Cross the Vale, conquer the four elemental dungeons in any order, collect the Key Shards,
 open the Great Gate, and defeat **Apexus, the Primal Chimera**. Plays with keyboard on
