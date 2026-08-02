@@ -1,6 +1,6 @@
 # 🦆 Platypus Adventures — The Legend of Gus
 
-### ▶ [Play it here](https://jordancarney.github.io/platypus-adventures/)
+### ▶ [Play it](https://jordancarney.github.io/platypus-adventures/)
 
 An open-world action-adventure in the spirit of classic Zelda, starring **Gus the Platypus**.
 Pure vanilla JavaScript + HTML5 Canvas. No dependencies, no build step — every sprite, tile
@@ -10,7 +10,7 @@ Cross the Vale, conquer the four elemental dungeons in any order, collect the Ke
 open the Great Gate, and defeat **Apexus, the Primal Chimera**. Plays with keyboard on
 desktop and touch controls on phones and tablets.
 
-**Features**
+## Features
 
 - A 200×200-tile open world with six regions, each with its own palette, music and wildlife
 - 5 room-based dungeons — Fire, Water, Air, Earth, and the combined Nexus of Fangs
@@ -19,45 +19,11 @@ desktop and touch controls on phones and tablets.
 - Visible gear: armor and sword tiers change how Gus and his swing actually look
 - 3 save files, a shop, heart vessels, a world map, and a chiptune soundtrack
 
-## Run locally
-
-ES modules can't load from `file://`, so serve the folder. Use the included dev server —
-it disables caching, which plain `http.server` does not (browsers will happily serve you
-stale JS after an edit otherwise):
-
-```bash
-python3 dev_server.py 8642
-```
-
-Then open http://localhost:8642 — or use `npx serve`, VS Code Live Server, etc.
-
-## Deploy to GitHub Pages
-
-The repo root is the site — no build step, no dependencies:
-
-1. Push to GitHub.
-2. Repo **Settings → Pages → Source**: deploy from a branch, `main`, `/ (root)`.
-3. Your game is live at `https://<user>.github.io/<repo>/`.
-
-All asset paths are relative, so it works from a subpath like `/platypus-adventures/`
-without configuration. The `.nojekyll` file tells Pages to publish the files as-is instead
-of running them through Jekyll.
-
-### Releasing an update
-
-Bump `VERSION` in [js/version.js](js/version.js) as part of the deploy. Live sessions
-poll that file with caching disabled (on load, every 10 minutes, and whenever the tab is
-foregrounded) and reload themselves when it changes — immediately on the title screen,
-or deferred until the player returns there. This is what rescues a phone/iPad tab that's
-been open since before the deploy; without the bump, devices still update, but only after
-their normal cache expiry and a manual reload. The running build is stamped in the corner
-of the title screen.
-
 ## Controls
 
 ### Keyboard
 
-| Action | Keys |
+| Action | Input |
 |---|---|
 | Move | WASD / Arrow keys |
 | Sword | Space / J / Z |
@@ -127,11 +93,70 @@ works too, just smaller. Add it to your home screen for a fullscreen, browser-ch
   armor, gear levels, arrow types owned, coins, diamonds, hearts, shards and dungeons cleared —
   so you can tell them apart at a glance. `Q` (or the **X** button) erases a file.
 
-## Dev cheats
+## Run locally
+
+ES modules can't load from `file://`, so serve the folder. Use the included dev server —
+it disables caching, which plain `http.server` does not (browsers will happily serve you
+stale JS after an edit otherwise):
+
+```bash
+python3 dev_server.py 8642
+```
+
+Then open http://localhost:8642 — or use `npx serve`, VS Code Live Server, etc.
+
+### Dev cheats
 
 Open with `?debug=1`:
 F1 = full gear · F2 = warp between landmarks · F3 = heal · F4 = +500 coins/+50 diamonds · G = god mode
 
+## Deploys
+
+The repo root is the site — no build step, no dependencies:
+
+1. Push to `main`.
+2. Repo **Settings → Pages → Source**: deploy from a branch, `main`, `/ (root)`.
+3. The game is live at https://jordancarney.github.io/platypus-adventures/.
+
+Every push to `main` publishes automatically. All asset paths are relative, so it works
+from a subpath like `/platypus-adventures/` without configuration. The `.nojekyll` file
+tells Pages to publish the files as-is instead of running them through Jekyll.
+
+### Releasing an update
+
+**Bump `VERSION` in [js/version.js](js/version.js) as part of the deploy.** Live sessions
+poll that file with caching disabled (on load, every 10 minutes, and whenever the tab is
+foregrounded) and reload themselves when it changes — immediately on the title screen,
+or deferred until the player returns there. This is what rescues a phone/iPad tab that's
+been open since before the deploy; without the bump, devices still update, but only after
+their normal cache expiry and a manual reload. The running build is stamped in the corner
+of the title screen.
+
 ## Project layout
+
+```
+index.html       Canvas host + boot script tag
+style.css        Page chrome around the canvas
+dev_server.py    Local dev server with caching disabled
+js/main.js       Boot + fixed-timestep game loop
+js/game.js       Orchestration: modes, areas, camera, spawning, combat, economy
+js/config.js     Constants, balance tables, bindings, shop data
+js/worldgen.js   Deterministic 200×200 overworld, 5 regions around a central hub
+js/dungeons.js   Five dungeons authored as ASCII rooms + parser
+js/arena.js      The Crucible wave arena
+js/enemies.js    Enemy AI archetypes, bestiary, minibosses, bosses
+js/entities.js   Player, projectiles, pickups, chests, props, push blocks
+js/pixelart.js   Character/item art as ASCII pixel maps, baked to offscreen canvases
+js/tiles.js      Tile ids, properties, procedurally painted tile atlas
+js/font.js       5×7 bitmap font (no antialiasing, so it stays crisp when scaled)
+js/ui.js         HUD, title screen, dialogs, shop, shrine, map, pause, death, credits
+js/input.js      Keyboard + touch state mapped to named actions
+js/touch.js      Floating thumbstick + action buttons + menu taps
+js/audio.js      Synthesized sound effects + chiptune sequencer (WebAudio, no assets)
+js/save.js       localStorage persistence across three save slots
+js/updates.js    Detects new deploys and refreshes stale sessions
+js/version.js    Single source of truth for the build version — bump on every deploy
+js/util.js       Math, RNG, geometry helpers
+```
 
 See [DESIGN.md](DESIGN.md) for the full game design document and file map.

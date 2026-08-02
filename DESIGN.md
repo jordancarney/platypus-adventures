@@ -17,13 +17,17 @@ Primal Chimera.
 - Always rendered **standing upright** (Cat Quest style) on a top-down world.
 - Moves 8-directionally; attacks aim in the 4 cardinal directions (last direction pressed).
 - Can swim in deep water (he's a platypus!) at reduced speed; can't attack while swimming.
-- **Sword** (from the start): arc slash, levels 1–5, upgraded at the shop.
+- **Sword** (from the start): arc slash, levels 1–6, upgraded at the shop.
 - **Shield** (from Elder Mirri): hold to block frontal hits; upgrades widen block/deflect projectiles.
 - **Bow** (chest in Billabong Village): fires the selected arrow type; uses one shared ammo pool.
-- **Armor**: 3 purchasable tiers, reduces damage, visually tints Gus.
-- **Health**: starts at 3 hearts (1 heart = 2 HP), grows via Heart Vessels bought with diamonds. Max 12.
+- **Armor**: levels 1–6, reduces damage, visually tints Gus.
+- **Health**: starts at 3 hearts (1 heart = 2 HP), grows via Heart Vessels bought with diamonds,
+  plus one per Key Shard. Max 20 (see [Economy](#economy-baseline-prices)).
 
-### Arrow types (each has its own level 1–3, upgraded at the shop)
+Every upgrade track tops out at **Lv 6** (`MAX_LEVEL` in [js/config.js](js/config.js)) — see
+[Upgrades](#upgrades--every-track-runs-to-lv-6) for the full table.
+
+### Arrow types (each has its own level 1–6, upgraded at the shop)
 
 | Type      | Source                     | Effect                                  | Ammo cost |
 |-----------|----------------------------|------------------------------------------|-----------|
