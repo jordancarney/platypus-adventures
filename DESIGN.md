@@ -42,20 +42,12 @@ Every upgrade track tops out at **Lv 6** (`MAX_LEVEL` in [js/config.js](js/confi
 
 Touch is a first-class input, not a fallback: on-screen controls fade in on first touch and
 retire when a key is pressed. Movement uses a floating thumbstick (origin = wherever the thumb
-lands in the lower-left), the sword auto-repeats while held, and every menu is tappable.
-See `js/touch.js` for layout constants and `README.md` for the player-facing summary.
+lands in the lower-left), the sword auto-repeats while held, and every menu is tappable. Warp
+home must be *held*, with a ring filling as it charges, so it can't fire by accident.
 
-| Action            | Keys                  |
-|-------------------|-----------------------|
-| Move              | WASD / Arrow keys     |
-| Sword             | Space / J / Z         |
-| Bow               | K / X                 |
-| Shield (hold)     | L / C / Shift         |
-| Cycle arrow type  | Q / R  (or 1–6 direct)|
-| Interact / Talk   | E / Enter             |
-| World map         | M                     |
-| Pause             | Esc / P               |
-| Mute audio        | O                     |
+Bindings live in `KEYMAP` ([js/config.js](js/config.js)) and reach players through the Controls
+page in the pause menu, which renders from those same bindings — so there is no hand-maintained
+list anywhere to fall out of sync. Touch layout constants are in [js/touch.js](js/touch.js).
 
 ## Currencies & pickups
 
@@ -162,11 +154,22 @@ is on screen the whole time block is held, so it must not wash Gus out.
 
 ## Economy (baseline prices)
 
-- Sword L2–L5: 100 / 250 / 600 / 1200 coins
-- Armor T1–T3: 80 / 300 / 800 coins
-- Shield L2–L3: 120 / 400 coins · Bow L2–L3: 150 / 450 coins
-- Arrow levels (per type) L2/L3: regular 40/120, elemental 60/180
-- Ammo capacity: 80 / 250 coins · Crayfish snack: 25 · 10 arrows: 15
+Gear prices come from `UPGRADE_TRACKS` in [js/config.js](js/config.js); arrow prices are
+computed, not listed, as `ARROW_UP_BASE[type] × ARROW_UP_STEP[lv]`. Where this table and the
+code disagree, the code wins.
+
+| Track | Levels | Coins per step |
+|---|---|---|
+| Sword | 2–6 | 100 / 250 / 600 / 1200 / 2400 |
+| Armor | 1–6 | 80 / 300 / 800 / 1500 / 2600 / 4200 |
+| Shield | 2–6 | 120 / 400 / 900 / 1700 / 3000 |
+| Bow | 2–6 | 150 / 450 / 950 / 1800 / 3200 |
+| Quiver | 1–6 | 80 / 250 / 550 / 1000 / 1700 / 2800 |
+| Arrows — regular | 2–6 | 40 / 120 / 240 / 400 / 640 |
+| Arrows — fire/ice/lightning/bomb | 2–6 | 60 / 180 / 360 / 600 / 960 |
+| Arrows — light | 2–6 | 100 / 300 / 600 / 1000 / 1600 |
+
+- Consumables: crayfish snack 25 coins · 10 arrows 15 coins
 - Heart Vessels: 4, 6, 8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36 diamonds
   (13 vessels, 228 diamonds total → 16 hearts; +1 heart per Key Shard → 20 max)
 
