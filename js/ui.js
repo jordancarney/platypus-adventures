@@ -1,6 +1,6 @@
 // HUD, title screen, dialogs, shop, shrine, map, pause, banners, death, credits.
 import { VIEW_W, VIEW_H, ARROW_TYPES, ARROWS, UPGRADE_TRACKS, CONSUMABLES, MAX_LEVEL,
-  ARROW_UP_BASE, ARROW_UP_STEP, ARROW_UP_DESC, VESSEL_COSTS, REGION_NAMES, TELEPORT } from './config.js';
+  ARROW_UP_BASE, ARROW_UP_STEP, ARROW_UP_DESC, VESSEL_COSTS, REGION_NAMES, TELEPORT, SIDE_QUESTS } from './config.js';
 import { clamp } from './util.js';
 import { drawSprite } from './pixelart.js';
 import { drawText, textWidth } from './font.js';
@@ -531,6 +531,16 @@ export function drawMap(g, ctx) {
       ctx.strokeStyle = '#101418';
       ctx.strokeRect(px - 2.5, py - 2.5, 6, 6);
     }
+    // side quest givers: pink until turned in, then fade to the same grey as cleared dungeons.
+    // (trinkets carry a `quest` field too, but showing their location would spoil the fetch.)
+    for (const p of g.area.props || []) {
+      if (!p.quest || p.kind === 'trinket') continue;
+      const [px, py] = pt(p.tx, p.ty);
+      ctx.fillStyle = g.questState(p.quest) === 'done' ? '#8a8278' : '#ff8ad0';
+      ctx.fillRect(px - 2, py - 2, 5, 5);
+      ctx.strokeStyle = '#101418';
+      ctx.strokeRect(px - 2.5, py - 2.5, 6, 6);
+    }
     if (Math.floor(g.time * 3) % 2 === 0) {
       const [px, py] = pt(g.player.cx / 16, g.player.cy / 16);
       ctx.fillStyle = '#fff';
@@ -546,6 +556,13 @@ export function drawMap(g, ctx) {
     ];
     q.forEach(([label, done], i) => {
       text(ctx, (done ? '[x] ' : '[ ] ') + label, lx, 44 + i * 12, { size: 7, color: done ? '#8a8278' : '#f0ead8' });
+    });
+    text(ctx, 'SIDE QUESTS', lx, 124, { size: 8, color: '#ff8ad0' });
+    Object.values(SIDE_QUESTS).forEach((sq, i) => {
+      const s = g.questState(sq.id);
+      const suffix = s === 'ready' ? ' - ready!' : '';
+      text(ctx, (s === 'done' ? '[x] ' : '[ ] ') + sq.name + suffix, lx, 138 + i * 12,
+        { size: 7, color: s === 'done' ? '#8a8278' : s === 'ready' ? '#ffd23a' : '#f0ead8' });
     });
   } else if (g.area.isArena) {
     text(ctx, 'THE CRUCIBLE', VIEW_W / 2, 20, { size: 12, align: 'center', color: '#f0c83a' });

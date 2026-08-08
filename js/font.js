@@ -135,6 +135,20 @@ function tinted(color) {
 export const textWidth = (str, scale = 1) =>
   String(str).length ? String(str).length * ADVANCE * scale - scale : 0;
 
+// Greedy word-wrap into as many lines as needed to fit maxWidth (internal pixels). A
+// single word wider than maxWidth is left unbroken rather than split mid-word.
+export function wrapText(str, maxWidth, scale = 1) {
+  const lines = [];
+  for (const word of String(str).split(' ')) {
+    const cur = lines[lines.length - 1];
+    const test = cur ? cur + ' ' + word : word;
+    if (cur && textWidth(test, scale) > maxWidth) lines.push(word);
+    else if (cur) lines[lines.length - 1] = test;
+    else lines.push(word);
+  }
+  return lines;
+}
+
 // Characters without art fall back to '?', so add a glyph above rather than relying on it.
 
 export function drawText(ctx, str, x, y, opts = {}) {

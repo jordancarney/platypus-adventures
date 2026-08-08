@@ -1,8 +1,8 @@
 // Game orchestration: modes, areas, camera, spawning, combat, triggers, economy.
 import { VIEW_W, VIEW_H, TILE, SWORD_DMG, ARROWS, ARROW_TYPES, VESSEL_COSTS, HEART_PER_SHARD,
-  CRAYFISH_HEAL, AMMO_CAPS, MAX_LEVEL, SHIELD_REFLECT, PLAYER, TELEPORT, DEBUG } from './config.js';
+  CRAYFISH_HEAL, AMMO_CAPS, MAX_LEVEL, SHIELD_REFLECT, PLAYER, TELEPORT, DEBUG, SIDE_QUESTS } from './config.js';
 import { clamp, dist, aabb, lerp } from './util.js';
-import { T, drawTileTo, buildTileAtlas } from './tiles.js';
+import { T, drawTileTo, buildTileAtlas, isSolid } from './tiles.js';
 import { buildOverworld, REGION, LM } from './worldgen.js';
 import { buildDungeon } from './dungeons.js';
 import * as arena from './arena.js';
@@ -13,6 +13,11 @@ import { input } from './input.js';
 import { audio } from './audio.js';
 import { touch } from './touch.js';
 import * as ui from './ui.js';
+import { wrapText } from './font.js';
+
+// Matches drawDialog's box in ui.js: panel spans x:8..VIEW_W-8, text starts at x=18,
+// leaving a small margin before the right border.
+const DIALOG_WRAP_PX = VIEW_W - 36;
 
 const REGION_MUSIC = ['marsh', 'fire', 'water', 'air', 'earth', 'confluence', 'village'];
 const GATE_KEYS = { fire: 'fireGate', water: 'waterGate', air: 'airGate', earth: 'earthGate', nexus: 'nexusGate', arena: 'arenaGate' };
@@ -73,7 +78,7 @@ export class Game {
       arrows: { ammo: 0, cap: PLAYER.baseAmmoCap, types },
       arrowSel: 'regular', quiver: 0,
       shards: 0, vessels: 0, arenaBest: 0,
-      dungeonsDone: {}, keys: {}, fangs: {}, flags: {},
+      dungeonsDone: {}, keys: {}, fangs: {}, flags: {}, quests: {},
       area: 'overworld', pos: null,
       god: false,
     };
@@ -175,7 +180,7 @@ export class Game {
         }
         case 'pot': this.ents.push(new Pot(p.tx, p.ty)); break;
         case 'dolphin':
-          this.ents.push(new Dolphin(p.tx * TILE + 8, p.ty * TILE + 8, p.name, DOLPHIN_LINES[p.line % DOLPHIN_LINES.length]));
+          this.ents.push(new Dolphin(p.tx * TILE + 8, p.ty * TILE + 8, p.name, DOLPHIN_LINES[p.line % DOLPHIN_LINES.length], p.quest));
           break;
         case 'block': this.ents.push(new PushBlock(p.tx, p.ty)); break;
         case 'gate': if (!this.state.flags.gate_open) this.ents.push(new Prop(p)); break;
@@ -526,7 +531,9 @@ export class Game {
 
   // ------------------------------------------------ dialog / npc / items
   openDialog(name, textStr, cb) {
-    const lines = textStr.split('|');
+    // `|` marks an intentional beat/paragraph break; each resulting chunk auto-wraps to
+    // fit the dialog box, so callers never need to hand-break lines for width.
+    const lines = textStr.split('|').flatMap(chunk => wrapText(chunk, DIALOG_WRAP_PX));
     const pages = [];
     for (let i = 0; i < lines.length; i += 3) pages.push(lines.slice(i, i + 3));
     this.dialog = { name, pages, page: 0, chars: 0, done: false, cb };
@@ -574,6 +581,16 @@ export class Game {
     this.save();
   }
 
+  // The interact-key range check is a flat pixel radius, which is wide enough to reach
+  // through a single-tile-thick wall (e.g. the cracked rock sealing a trinket or chest) if
+  // the player hugs it. Require at least one open cardinal neighbor of the entity's own
+  // tile, so anything genuinely walled off stays unreachable until the wall is actually
+  // broken -- distance alone was letting players collect walled loot without ever bombing it.
+  propReachable(e) {
+    const tx = Math.floor(e.cx / TILE), ty = Math.floor(e.cy / TILE);
+    return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => !isSolid(this.area.get(tx + dx, ty + dy)));
+  }
+
   interactProp(prop) {
     const d = prop.def;
     switch (prop.kind) {
@@ -610,7 +627,70 @@ export class Game {
         break;
       }
       case 'npc': this.npcDialog(d); break;
+      case 'trinket': {
+        if (this.state.flags[d.id]) { this.toast('Nothing here.'); return; }
+        this.state.flags[d.id] = true;
+        this.collectQuestItem(d.quest);
+        break;
+      }
     }
+  }
+
+  // ------------------------------------------------ side quests
+  // Fetch quests: new -> active -> ready (item flag set) -> done.
+  // Rescue quests have no offer step -- they start visibly in trouble and complete the
+  // moment their kill-all encounter is cleared (see solvePuzzle's `p.quest` branch).
+  questState(id) {
+    const q = SIDE_QUESTS[id];
+    if (this.state.quests[id] === 'done') return 'done';
+    if (q.kind === 'rescue') return 'active';
+    if (this.state.quests[id] !== 'active') return 'new';
+    return this.state.flags[q.itemId] ? 'ready' : 'active';
+  }
+  questMarker(id) {
+    if (!id) return null;
+    const q = SIDE_QUESTS[id], s = this.questState(id);
+    if (s === 'new') return 'new';
+    if (s === 'ready') return 'ready';
+    if (s === 'active' && q.kind === 'rescue') return 'urgent';
+    return null;
+  }
+  startQuest(id) {
+    this.state.quests[id] = 'active';
+    this.save();
+  }
+  collectQuestItem(id) {
+    const q = SIDE_QUESTS[id];
+    audio.sfx('shard');
+    this.toast(`Found it! Bring it back to ${q.giver}.`);
+    this.save();
+  }
+  completeQuest(id) {
+    if (this.state.quests[id] === 'done') return;
+    const q = SIDE_QUESTS[id];
+    this.state.quests[id] = 'done';
+    this.grantContents(q.reward);
+    this.setBanner('QUEST COMPLETE!', q.name, '#f0c83a');
+    this.save();
+  }
+  dolphinQuestDialog(dp) {
+    this.fetchQuestDialog(dp.name, dp.questId);
+  }
+  // Shared by every fetch-quest giver (dolphin or NPC). `doneFallback`, if given, replaces
+  // the quest's own `done` line once turned in -- used where the NPC has other flavor text.
+  fetchQuestDialog(name, id, doneFallback) {
+    const s = this.questState(id), q = SIDE_QUESTS[id];
+    if (s === 'new') this.openDialog(name, q.offer, () => this.startQuest(id));
+    else if (s === 'ready') this.openDialog(name, q.turnIn, () => this.completeQuest(id));
+    else if (s === 'active') this.openDialog(name, q.active);
+    else if (doneFallback) doneFallback();
+    else this.openDialog(name, q.done);
+  }
+  // Rescue quests have no offer step and complete automatically (see solvePuzzle), so
+  // there are only two lines to ever show: still in trouble, or already thanked you.
+  rescueQuestDialog(name, id) {
+    const q = SIDE_QUESTS[id];
+    this.openDialog(name, this.questState(id) === 'done' ? q.done : q.trouble);
   }
 
   npcDialog(d) {
@@ -638,10 +718,18 @@ export class Game {
     } else if (d.dialog === 'pip') {
       this.openDialog(d.name, "Did you know platypuses can SWIM?|Deep water is no wall for you, Gus!|...but you can't fight while paddling.");
     } else if (d.dialog === 'marlo') {
-      const t = this.tier();
-      this.openDialog(d.name, t >= 2
-        ? 'The predators grow stronger with every shard.|The shiny ELITE ones drop extra loot!'
-        : 'Cut tall grass for coins and snacks.|Enemies drop CRAYFISH -- Gus loves those.|The statue saves your adventure.');
+      this.fetchQuestDialog(d.name, 'marlo_ring', () => {
+        const t = this.tier();
+        this.openDialog(d.name, t >= 2
+          ? 'The predators grow stronger with every shard.|The shiny ELITE ones drop extra loot!'
+          : 'Cut tall grass for coins and snacks.|Enemies drop CRAYFISH -- Gus loves those.|The statue saves your adventure.');
+      });
+    } else if (d.dialog === 'barnaby') {
+      this.rescueQuestDialog(d.name, 'barnaby_rescue');
+    } else if (d.dialog === 'fenwick') {
+      this.rescueQuestDialog(d.name, 'fenwick_rescue');
+    } else if (d.dialog === 'yuma') {
+      this.fetchQuestDialog(d.name, 'yuma_chime');
     }
   }
 
@@ -847,7 +935,7 @@ export class Game {
     // interact
     if (input.pressed('interact')) {
       const near = this.ents
-        .filter(e => !e.dead && e.interact && dist(p.cx, p.cy, e.cx, e.cy) < 31)
+        .filter(e => !e.dead && e.interact && dist(p.cx, p.cy, e.cx, e.cy) < 31 && this.propReachable(e))
         .sort((a, b) => dist(p.cx, p.cy, a.cx, a.cy) - dist(p.cx, p.cy, b.cx, b.cy))[0];
       if (near) near.interact(this);
     }
@@ -903,11 +991,13 @@ export class Game {
   solvePuzzle(p) {
     if (this.puzzleSolved(p)) return;
     this.state.flags['puzzle_' + p.id] = true;
-    for (const [x, y] of p.doors) this.area.set(x, y, p.ground);
     audio.sfx('shard');
     this.shake(4, 0.4);
+    if (p.quest) { this.completeQuest(p.quest); return; }
+    for (const [x, y] of p.doors) this.area.set(x, y, p.ground);
     for (const [x, y] of p.doors) this.burst(x * TILE + 8, y * TILE + 8, '#f0c83a', 8);
-    this.setBanner('THE WARD OPENS!', 'The way ahead is clear.', '#f0c83a');
+    const b = p.solvedBanner || { title: 'THE WARD OPENS!', sub: 'The way ahead is clear.', color: '#f0c83a' };
+    this.setBanner(b.title, b.sub, b.color);
     this.save();
   }
 
@@ -927,7 +1017,7 @@ export class Game {
           if (dist(this.player.cx, this.player.cy, p.trigger[0] * TILE + 8, p.trigger[1] * TILE + 8) < 70) {
             p.armed = true;
             audio.sfx('roar');
-            this.toast('The wardens stir!');
+            this.toast(p.armToast || (p.quest ? 'They notice you!' : 'The wardens stir!'));
             p.spawns.forEach(([x, y], i) => {
               const e = this.spawnEnemy(p.types[i % p.types.length], x * TILE + 8, y * TILE + 8, {});
               e.puzzleId = p.id;

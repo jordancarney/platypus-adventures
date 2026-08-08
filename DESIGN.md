@@ -192,6 +192,50 @@ village bow chest still has a way in.
 | Earth | The Root Wardens | push 2 stone blocks onto 2 floor plates |
 | Water | The Tide Wardens | 4 guardians wake on entry; beat them all |
 
+## Side quests
+
+Entirely optional -- the game is beatable without touching any of them -- but required to
+100% a file. Defined in `SIDE_QUESTS` (config.js), keyed by id, with a `giver` (the NPC or
+dolphin name that carries the dialogue and the reward) and a `kind`:
+
+- **Fetch** (`bubbles_shell`, `marlo_ring`, `yuma_chime`): new → active → ready → done.
+  Talking to the giver while `new` starts it; the reward item is a `trinket` prop hidden in
+  the world that sets an item flag on pickup; talking again while `ready` pays out and
+  completes it.
+- **Rescue** (`barnaby_rescue`, `fenwick_rescue`): no offer step -- the NPC is already in
+  trouble when found. Reuses the ward system's kill-all mechanic (a `puzzles` entry with a
+  `quest` field instead of doors): approaching arms an ambush, and clearing every spawned
+  enemy completes the quest and pays out automatically, no return trip needed.
+
+Every quest giver shows a bobbing marker above their head so a quest is never missed:
+yellow "!" for a new offer, gold for a ready turn-in, red for "help me now" (rescue,
+mid-encounter). Fetch quests show nothing while the item is still out in the world, since
+the point is finding it. The map's minimap plots a pink dot per giver (never per hidden
+item, or it'd spoil the fetch) that fades to grey once done, plus a SIDE QUESTS checklist
+next to the main QUEST list.
+
+Fenwick and Yuma sit out at the map's far NE/NW corners and hit harder than the rest.
+Fenwick's ambush is ten Fire-tier predators at once (vs. Barnaby's three marsh ones) --
+the biggest single fight outside a dungeon. Yuma's fetch stacks two layers: the rockfall
+still needs a bomb arrow like Marlo's, but a 3-strong nest of talons/an owl also has to be
+fought off first. That guard fight is its own `puzzles` entry (`yuma_guard`) -- kill-all
+like the rescues, but with no `quest` field, so clearing it doesn't complete the quest by
+itself; it just clears the guards, via an optional `armToast`/`solvedBanner` override on the
+puzzle so the flavor text doesn't say "THE WARD OPENS!" for a fight that isn't a ward.
+
+Trinkets and chests sealed behind cracked rock are only interactable once at least one
+cardinal-adjacent tile is open (`propReachable` in game.js) -- the flat pixel-radius interact
+check alone was reachable through a single-tile wall by hugging it, letting players loot
+walled items without ever bombing them open.
+
+| Quest | Giver | Reward |
+|---|---|---|
+| Bubbles' Lost Shell | Bubbles (village pond dolphin) | 40 coins, 2 diamonds |
+| A Friend in Trouble | Barnaby (marsh, cornered by predators) | 60 coins, 3 diamonds |
+| Marlo's Ring | Marlo (village) | 50 coins, 3 diamonds |
+| Fenwick's Peril | Fenwick (NE edge, Cinderscale Wastes) | 120 coins, 5 diamonds |
+| Yuma's Wind Chime | Yuma (NW edge, Skyreach Bluffs) | 100 coins, 5 diamonds |
+
 ## The Crucible (wave arena)
 
 A colosseum on the sand just outside the village's east gate — a coin/diamond sink-filler

@@ -207,4 +207,49 @@ export const DUNGEON_NAMES = {
   nexus: 'The Nexus of Fangs',
 };
 
+// Side quests: entirely optional, but required to 100% a file. `giver` is the NPC/dolphin
+// name that carries the dialogue and hands out the reward. Fetch quests gate on an item
+// flag set when its trinket is picked up in the world; rescue quests gate on a kill-all
+// encounter (see the `puzzles` entries with a `quest` field) and complete automatically.
+export const SIDE_QUESTS = {
+  bubbles_shell: {
+    id: 'bubbles_shell', name: "Bubbles' Lost Shell", giver: 'Bubbles', kind: 'fetch',
+    itemId: 'sqitem_bubbles_shell', reward: { coins: 40, diamonds: 2 },
+    offer: "Psst, Gus! I dropped my favorite shell somewhere up the river, north of here. Could you swim up and find it for me?",
+    active: "Still haven't found my shell? It's up the river, north of here somewhere.",
+    turnIn: 'You found it! Oh, thank you, thank you, Gus!',
+    done: "Thanks again for finding my shell. You're the best!",
+  },
+  barnaby_rescue: {
+    id: 'barnaby_rescue', name: 'A Friend in Trouble', giver: 'Barnaby', kind: 'rescue',
+    reward: { coins: 60, diamonds: 3 },
+    trouble: "Help! They won't let me pass -- watch yourself, Gus!",
+    done: "Thanks again for chasing those things off. I won't forget it, Gus.",
+  },
+  marlo_ring: {
+    id: 'marlo_ring', name: "Marlo's Ring", giver: 'Marlo', kind: 'fetch',
+    itemId: 'sqitem_marlo_ring', reward: { coins: 50, diamonds: 3 },
+    offer: "I lost my dad's ring out past the forest, buried under some old rubble. A good arrow could probably crack it open. Would you look?",
+    active: "Any luck finding that ring? It's under rubble out past the forest.",
+    turnIn: "My dad's ring! I can't believe it -- thank you so much, Gus.",
+    done: "Couldn't have gotten that ring back without you, Gus.",
+  },
+  // The next two live out at the map's far edges and hit harder than the others: a bigger,
+  // meaner ambush for the rescue, and a fetch buried deep in hostile, heavily-patrolled ground.
+  fenwick_rescue: {
+    id: 'fenwick_rescue', name: "Fenwick's Peril", giver: 'Fenwick', kind: 'rescue',
+    reward: { coins: 120, diamonds: 5 },
+    trouble: "They've got me boxed in against the rocks -- TEN of them, Gus! I don't like our odds!",
+    done: "Ten of them and you didn't even flinch. Remind me never to owe you money.",
+  },
+  yuma_chime: {
+    id: 'yuma_chime', name: "Yuma's Wind Chime", giver: 'Yuma', kind: 'fetch',
+    itemId: 'sqitem_yuma_chime', reward: { coins: 100, diamonds: 5 },
+    offer: "The wind carried my grandmother's chime clean off the bluff, out toward the very edge of the sky. It's sealed under rockfall now, and the talons nest right on top of it -- a blasting arrow's your only way in, if you can clear them first. Would you brave it?",
+    active: "Any sign of my chime out past the cliffs? Mind the talons -- they nest right on top of it.",
+    turnIn: "My grandmother's chime! I never thought I'd hear it sing again. Thank you, Gus.",
+    done: "Listen -- that's her chime on the wind again. All thanks to you.",
+  },
+};
+
 export const DEBUG = new URLSearchParams(location.search).has('debug');

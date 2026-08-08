@@ -365,6 +365,26 @@ DEFS.arrows = { colors: { w: '#a0764a', h: '#c8c8d0', f: '#d84a2a' }, map: [
 DEFS.key = { colors: { g: '#f0c83a', d: '#a07818' }, map: [
   '.ggg....', 'g...g...', 'g...gggg', 'g...g.g.', '.ggg..g.',
 ]};
+DEFS.shell = { colors: { p: '#f5c6d6', d: '#c98aa0', h: '#fff0f5' }, map: [
+  '..ppp..',
+  '.pphpp.',
+  'pphhhpp',
+  'pdpppdp',
+  '.ddddd.',
+]};
+DEFS.ring = { colors: { g: '#f0c83a', h: '#fff6c8' }, map: [
+  '.ggg.',
+  'g.h.g',
+  'g...g',
+  '.ggg.',
+]};
+DEFS.chime = { colors: { g: '#c8d8e8', h: '#ffffff', d: '#7a8a9a' }, map: [
+  '.ggg.',
+  'g.h.g',
+  '.ggg.',
+  'd.d.d',
+  'd.d.d',
+]};
 DEFS.bigfang = { colors: { w: '#f0ead8', d: '#b0a488', g: '#f0c83a' }, map: [
   'wwwwww.', 'gggggg.', 'wwwwww.', '.wwww..', '.wwww..', '..www..', '..ww...', '..ww...', '...w...',
 ]};

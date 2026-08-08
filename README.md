@@ -18,6 +18,8 @@ Landscape is recommended, and it works nicely added to a home screen.
 - Sword, shield, bow and elemental arrows, all upgradable at the village shop
 - Visible gear: armor, sword and shield tiers change how Gus actually looks
 - A wave arena, heart vessels, a world map, multiple save files, and a chiptune soundtrack
+- Optional side quests -- fetch errands and a friend to rescue -- marked with a "!" and
+  tracked on the map, for players chasing 100%
 
 ## Built with
 

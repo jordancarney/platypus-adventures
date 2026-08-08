@@ -266,7 +266,7 @@ export function buildOverworld() {
     { kind: 'shrine', tx: 97, ty: 112 },
     { kind: 'chest', tx: 102, ty: 112, id: 'ow_bow', contents: { bow: 1 }, msg: 'You got the RANGER BOW!|Press K / X to shoot arrows.|Q / R swaps arrow types.' },
     { kind: 'npc', tx: 95, ty: 108, sprite: 'villager', name: 'Pip', dialog: 'pip' },
-    { kind: 'npc', tx: 106, ty: 111, sprite: 'villager', name: 'Marlo', dialog: 'marlo' },
+    { kind: 'npc', tx: 106, ty: 111, sprite: 'villager', name: 'Marlo', dialog: 'marlo', quest: 'marlo_ring' },
     { kind: 'sign', tx: 100, ty: 100, text: 'N: The Confluence.|Sealed by the Great Gate. Four Key Shards required.' },
     { kind: 'sign', tx: 112, ty: 109, text: 'E, then N: Cinderscale Wastes.|Home of the Molten Maw. Bring courage.' },
     { kind: 'sign', tx: 112, ty: 113, text: 'SE: Mistfall Lagoon.|The Sunken Grotto lies on the island. Platypuses can swim!' },
@@ -371,21 +371,92 @@ export function buildOverworld() {
     },
   });
 
+  // --- side quest: Barnaby, cornered by predators out in the marsh. No door, no ward --
+  // just a villager who needs the pack cleared before he'll stop cowering. ---
+  const BARNABY_SPOT = [65, 96];
+  blob(...BARNABY_SPOT, 4, (x, y) => { if (reg(x, y) === REGION.MARSH) set(x, y, T.GRASS); });
+  propList.push({ kind: 'npc', tx: BARNABY_SPOT[0], ty: BARNABY_SPOT[1], sprite: 'villager',
+    name: 'Barnaby', dialog: 'barnaby', quest: 'barnaby_rescue' });
+  puzzles.push({
+    id: 'barnaby_rescue', kind: 'killall', quest: 'barnaby_rescue', doors: [], ground: T.GRASS,
+    trigger: BARNABY_SPOT, spawns: [[61, 93], [69, 93], [65, 100]], types: ['rakali', 'rakali', 'adder'], armed: false,
+  });
+
+  // --- side quest: Fenwick, out at the map's northeast edge in the Cinderscale Wastes --
+  // the same cornered-villager setup as Barnaby, but TEN Fire-tier predators deep, not
+  // three marsh ones. Reaching him at all means crossing hostile ground alone. ---
+  const FENWICK_SPOT = [188, 14];
+  blob(...FENWICK_SPOT, 8, (x, y) => { if (reg(x, y) === REGION.FIRE) set(x, y, T.ASH); });
+  propList.push({ kind: 'npc', tx: FENWICK_SPOT[0], ty: FENWICK_SPOT[1], sprite: 'villager',
+    name: 'Fenwick', dialog: 'fenwick', quest: 'fenwick_rescue' });
+  puzzles.push({
+    id: 'fenwick_rescue', kind: 'killall', quest: 'fenwick_rescue', doors: [], ground: T.ASH,
+    trigger: FENWICK_SPOT,
+    spawns: [[184, 11], [192, 11], [184, 17], [192, 17], [188, 9], [188, 19], [182, 14], [194, 14], [185, 10], [191, 18]],
+    types: ['snapjaw', 'emberfox', 'mgoanna', 'snapjaw', 'emberfox', 'mgoanna', 'snapjaw', 'emberfox', 'mgoanna', 'emberfox'],
+    armed: false,
+  });
+
+  // --- side quest: Yuma, at the northwest edge in the Skyreach Bluffs. Her grandmother's
+  // wind chime blew out toward the cliff edge and is sealed under rockfall -- same bomb
+  // arrow as Marlo's ring, but far more remote, with a nest of talons and an owl guarding
+  // the rockfall itself: getting the chime open safely means clearing them first. ---
+  const YUMA_SPOT = [14, 10];
+  blob(...YUMA_SPOT, 4, (x, y) => { if (reg(x, y) === REGION.AIR) set(x, y, T.PATH); });
+  propList.push({ kind: 'npc', tx: YUMA_SPOT[0], ty: YUMA_SPOT[1], sprite: 'villager',
+    name: 'Yuma', dialog: 'yuma', quest: 'yuma_chime' });
+  const YUMA_ITEM_SPOT = [8, 8];
+  blob(...YUMA_ITEM_SPOT, 6, (x, y) => { if (reg(x, y) === REGION.AIR) set(x, y, T.PATH); });
+  puzzles.push({
+    id: 'yuma_guard', kind: 'killall', doors: [], ground: T.PATH,
+    trigger: YUMA_ITEM_SPOT, spawns: [[5, 5], [11, 5], [8, 12]], types: ['talon', 'owl', 'talon'], armed: false,
+    armToast: 'The nest wakes!',
+    solvedBanner: { title: 'THE NEST CLEARS!', sub: 'The talons scatter on the wind.', color: '#e8f0ff' },
+  });
+
   // --- friendly dolphins: snapped to genuine deep water near each wish spot, since the
   // lagoon and river are generated with noise and a hardcoded tile may land on sand ---
   const DOLPHINS = [
     [162, 168, 'Bindi'], [172, 174, 'Splash'], [158, 180, 'Echo'],
-    [168, 164, 'Nari'], [131, 120, 'Coorong'], [120, 90, 'Bubbles'],
+    [168, 164, 'Nari'], [131, 120, 'Coorong'], [120, 90, 'Bubbles', 'bubbles_shell'],
   ];
-  DOLPHINS.forEach(([nx, ny, name], i) => {
+  DOLPHINS.forEach(([nx, ny, name, quest], i) => {
     let best = null, bestD = Infinity;
     for (let y = ny - 12; y <= ny + 12; y++) for (let x = nx - 12; x <= nx + 12; x++) {
       if (!inB(x, y) || get(x, y) !== T.DEEP) continue;
       const d = dist(x, y, nx, ny);
       if (d < bestD) { bestD = d; best = [x, y]; }
     }
-    if (best) propList.push({ kind: 'dolphin', tx: best[0], ty: best[1], name, line: i });
+    if (best) propList.push({ kind: 'dolphin', tx: best[0], ty: best[1], name, line: i, quest });
   });
+
+  // --- side quest items: fetch trinkets. Bubbles' shell washed well north of her own
+  // pond, up the river toward the Confluence, so finding it actually means a swim rather
+  // than just a step off the porch; Marlo's ring is sealed under rubble in the Earth reaches. ---
+  {
+    let best = null, bestD = Infinity;
+    for (let y = 46; y <= 78; y++) for (let x = 116; x <= 150; x++) {
+      if (!inB(x, y) || get(x, y) !== T.DEEP) continue;
+      const d = dist(x, y, 132, 58);
+      if (d < bestD) { bestD = d; best = [x, y]; }
+    }
+    if (best) propList.push({ kind: 'trinket', tx: best[0], ty: best[1],
+      id: 'sqitem_bubbles_shell', sprite: 'shell', quest: 'bubbles_shell' });
+  }
+  {
+    const [rx, ry] = [50, 145];
+    blob(rx, ry, 1.6, (x, y) => { if (reg(x, y) === REGION.EARTH) set(x, y, T.DARKGRASS); });
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]])
+      set(rx + dx, ry + dy, T.CRACKROCK);
+    propList.push({ kind: 'trinket', tx: rx, ty: ry, id: 'sqitem_marlo_ring', sprite: 'ring', quest: 'marlo_ring' });
+  }
+  {
+    const [cx2, cy2] = YUMA_ITEM_SPOT;
+    blob(cx2, cy2, 1.6, (x, y) => { if (reg(x, y) === REGION.AIR) set(x, y, T.PATH); });
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]])
+      set(cx2 + dx, cy2 + dy, T.CRACKROCK);
+    propList.push({ kind: 'trinket', tx: cx2, ty: cy2, id: 'sqitem_yuma_chime', sprite: 'chime', quest: 'yuma_chime' });
+  }
 
   // scattered treasure chests (some walled behind cracked rocks = bomb arrows)
   const chestSpots = [
@@ -421,6 +492,9 @@ export function buildOverworld() {
     // keep wandering enemies out of the puzzle courtyards and the arena grounds
     ['fireGate', 'waterGate', 'airGate', 'earthGate', 'nexusGate'].some(k => dist(x, y, ...LM[k]) < 19) ||
     dist(x, y, ...LM.arenaGate) < 9 ||
+    dist(x, y, ...BARNABY_SPOT) < 10 ||
+    dist(x, y, ...FENWICK_SPOT) < 14 ||
+    dist(x, y, ...YUMA_ITEM_SPOT) < 10 ||
     spawners.some(s => dist(x, y, s.tx, s.ty) < 4);
   for (const [rgKey, count] of Object.entries(COUNTS)) {
     const rgId = Number(rgKey);

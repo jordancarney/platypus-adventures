@@ -652,6 +652,23 @@ export class PushBlock extends Entity {
   draw(g, ctx) { drawSprite(ctx, 'block', this.cx, this.bottom); }
 }
 
+// ---------------------------------------------------------------- QUEST MARKER
+// A small bobbing "!" above anyone carrying a side quest -- yellow for a new offer, gold
+// for a ready turn-in, red for "come help me right now" (rescue quests, mid-encounter).
+const QUEST_MARKER_COLOR = { new: '#ffe066', ready: '#ffd23a', urgent: '#ff5a4a' };
+export function drawQuestMarker(ctx, cx, topY, kind, time, seed = 0) {
+  const color = QUEST_MARKER_COLOR[kind];
+  if (!color) return;
+  const y = topY + Math.sin(time * 4 + seed) * 1.5;
+  ctx.save();
+  ctx.fillStyle = '#101418';
+  ctx.fillRect(cx - 3, y - 9, 6, 9);
+  ctx.fillStyle = color;
+  ctx.fillRect(cx - 2, y - 8, 4, 5);
+  ctx.fillRect(cx - 2, y - 2, 4, 2);
+  ctx.restore();
+}
+
 // ---------------------------------------------------------------- DOLPHIN (friendly)
 // team 'friend' rather than 'enemy', so every combat path in the game skips them by
 // construction — swords, arrows and blasts all filter on team === 'enemy'. hurt() is a
@@ -666,7 +683,7 @@ export const DOLPHIN_LINES = [
 ];
 
 export class Dolphin extends Entity {
-  constructor(x, y, name, line) {
+  constructor(x, y, name, line, questId) {
     super(x - 8, y - 4, 16, 8);
     this.team = 'friend';
     this.aquatic = true;
@@ -674,6 +691,7 @@ export class Dolphin extends Entity {
     this.solid = false;       // Gus can swim straight past a friend
     this.name = name || 'Dolphin';
     this.line = line || DOLPHIN_LINES[0];
+    this.questId = questId || null;
     this.dir = Math.random() * Math.PI * 2;
     this.turnT = Math.random() * 2;
     this.leapT = 3 + Math.random() * 6;
@@ -731,7 +749,8 @@ export class Dolphin extends Entity {
 
   interact(g) {
     audio.sfx('cray');
-    g.openDialog(this.name, this.line);
+    if (this.questId) g.dolphinQuestDialog(this);
+    else g.openDialog(this.name, this.line);
   }
 
   draw(g, ctx) {
@@ -749,6 +768,10 @@ export class Dolphin extends Entity {
     }
     const rise = this.vz > 0 ? -0.35 : this.z > 0 ? 0.35 : 0;   // nose up, then down
     drawSprite(ctx, 'dolphin', this.cx, y, { flip: this.flip, angle: rise * (this.flip ? -1 : 1) });
+    if (this.questId) {
+      const marker = g.questMarker(this.questId);
+      if (marker) drawQuestMarker(ctx, this.cx, y - 12, marker, g.time, this.id);
+    }
   }
 }
 
@@ -763,14 +786,25 @@ export class Prop extends Entity {
     else super(px + 2, py + 2, 12, 12);
     this.def = def;
     this.kind = def.kind;
-    this.solid = this.kind !== 'dungeon';
+    this.solid = this.kind !== 'dungeon' && this.kind !== 'trinket';
   }
   interact(g) { g.interactProp(this); }
   draw(g, ctx) {
     if (this.kind === 'dungeon') return; // stairs tile is the visual
     if (this.kind === 'npc') {
       const bob = this.def.sprite === 'wombat' ? 0 : Math.sin(g.time * 2 + this.id) * 0.8;
-      drawSprite(ctx, this.def.sprite, this.cx, this.bottom + 2 + bob, { flip: g.player && g.player.cx < this.cx });
+      const topY = this.bottom + 2 + bob;
+      drawSprite(ctx, this.def.sprite, this.cx, topY, { flip: g.player && g.player.cx < this.cx });
+      if (this.def.quest) {
+        const marker = g.questMarker(this.def.quest);
+        if (marker) drawQuestMarker(ctx, this.cx, topY - 18, marker, g.time, this.id);
+      }
+      return;
+    }
+    if (this.kind === 'trinket') {
+      if (g.state.flags[this.def.id]) return; // already collected
+      const bob = Math.sin(g.time * 2 + this.id) * 1.2;
+      drawSprite(ctx, this.def.sprite, this.cx, this.bottom + 1 + bob);
       return;
     }
     // the gate is masonry set into the wall, so it aligns to the tile grid exactly
