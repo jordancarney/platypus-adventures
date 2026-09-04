@@ -1,6 +1,6 @@
 // HUD, title screen, dialogs, shop, shrine, map, pause, banners, death, credits.
 import { VIEW_W, VIEW_H, ARROW_TYPES, ARROWS, UPGRADE_TRACKS, CONSUMABLES, MAX_LEVEL,
-  ARROW_UP_BASE, ARROW_UP_STEP, ARROW_UP_DESC, VESSEL_COSTS, REGION_NAMES, TELEPORT, SIDE_QUESTS } from './config.js';
+  ARROW_UP_BASE, ARROW_UP_STEP, ARROW_UP_DESC, VESSEL_COSTS, REGION_NAMES, TELEPORT, SPRINT, SIDE_QUESTS } from './config.js';
 import { clamp } from './util.js';
 import { drawSprite } from './pixelart.js';
 import { drawText, textWidth } from './font.js';
@@ -68,6 +68,18 @@ export function drawHUD(g, ctx) {
       drawSprite(ctx, 'shard', sx + i * 8, row2 + 8);
       ctx.restore();
     }
+  }
+  // stamina: only on screen while it's below full, so the HUD stays clean at rest
+  const sp = g.sprint;
+  if (sp && (sp.bar < SPRINT.max - 0.01 || sp.winded)) {
+    const bx = 10, by = row2 + 12, bw = 44, bh = 3;
+    const p = clamp(sp.bar / SPRINT.max, 0, 1);
+    ctx.fillStyle = '#101418';
+    ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
+    ctx.fillStyle = sp.winded ? (Math.floor(g.time * 8) % 2 ? '#e04a5a' : '#8a1a2a')
+      : p < SPRINT.windedUntil ? '#f0a03a' : '#8ad84a';
+    ctx.fillRect(bx, by, Math.round(bw * p), bh);
+    buttonIcon(ctx, 'run', bx - 5, by + 1, '#f0ead8', 0.5);
   }
   // arrow selector
   if (st.bow > 0) {
@@ -199,7 +211,7 @@ export function drawTitle(g, ctx) {
     text(ctx, 'Buttons on the right to fight', VIEW_W / 2, VIEW_H - 13, { size: 7, align: 'center', alpha: 0.85 });
   } else {
     text(ctx, 'Move: WASD/Arrows   Sword: SPACE/J   Bow: K   Shield: L/Shift', VIEW_W / 2, VIEW_H - 22, { size: 7, align: 'center', alpha: 0.85 });
-    text(ctx, 'Interact: E   Swap arrows: Q/R   Map: M   Pause: Esc', VIEW_W / 2, VIEW_H - 13, { size: 7, align: 'center', alpha: 0.85 });
+    text(ctx, 'Sprint: V   Interact: E   Swap arrows: Q/R   Map: M   Pause: Esc', VIEW_W / 2, VIEW_H - 13, { size: 7, align: 'center', alpha: 0.85 });
   }
 }
 
@@ -618,15 +630,16 @@ export function drawPause(g, ctx) {
   if (g.pausePage === 'controls') {
     const rows = [
       ['Move', 'WASD / Arrows'], ['Sword', 'Space / J / Z'], ['Bow', 'K / X'],
-      ['Shield (hold)', 'L / C / Shift'], ['Swap arrow', 'Q / R or 1-6'],
+      ['Shield (hold)', 'L / C / Shift'], ['Sprint (hold)', 'V / ;'],
+      ['Swap arrow', 'Q / R or 1-6'],
       ['Interact', 'E / Enter'], ['Warp home', 'T / H (hold)'],
       ['Map', 'M'], ['Mute', 'O'],
     ];
     rows.forEach(([a, b], i) => {
-      text(ctx, a, 110, 72 + i * 12, { size: 7, color: '#a8d8c0' });
-      text(ctx, b, 196, 72 + i * 12, { size: 7 });
+      text(ctx, a, 110, 70 + i * 11, { size: 7, color: '#a8d8c0' });
+      text(ctx, b, 196, 70 + i * 11, { size: 7 });
     });
-    text(ctx, 'Esc: back', VIEW_W / 2, 180, { size: 7, align: 'center', alpha: 0.8 });
+    text(ctx, 'Esc: back', VIEW_W / 2, 182, { size: 7, align: 'center', alpha: 0.8 });
     return;
   }
   const opts = ['Resume', 'Controls', `Sound: ${g.muted ? 'OFF' : 'ON'}`, 'Save & Quit'];
@@ -661,10 +674,21 @@ function pixelRing(ctx, cx, cy, r, thick) {
   }
 }
 
-function buttonIcon(ctx, icon, cx, cy, color) {
+function buttonIcon(ctx, icon, cx, cy, color, scale = 1) {
   cx = Math.round(cx); cy = Math.round(cy);
   ctx.fillStyle = color;
   switch (icon) {
+    case 'run': {                                   // double chevron: speed
+      const s = scale, px = Math.max(1, Math.round(2 * s));
+      for (let i = 0; i < 4; i++) {
+        const dx = Math.round(i * s), dy = Math.round((4 - i) * s);
+        for (const x of [cx - Math.round(6 * s) + dx, cx + dx]) {
+          ctx.fillRect(x, cy - dy, px, px);          // upper arm, down toward the apex
+          ctx.fillRect(x, cy + dy - 1, px, px);      // lower arm, mirrored
+        }
+      }
+      break;
+    }
     case 'sword':                                   // blade on the diagonal, hilt lower-left
       for (let i = 0; i < 9; i++) ctx.fillRect(cx - 5 + i, cy + 3 - i, 2, 2);
       ctx.fillRect(cx - 8, cy + 1, 6, 2);           // crossguard
@@ -752,7 +776,21 @@ export function drawTouchControls(g, ctx) {
     if (b.action === 'cycleR' && !st.bow) continue;
     // the swap button wears the selected arrow's colour, so type is readable at a glance
     const tint = b.action === 'cycleR' ? ARROWS[st.arrowSel].color : '#f0ead8';
-    drawPadButton(ctx, b, touch.down(b.action), tint);
+    drawPadButton(ctx, b, touch.down(b.action) || (b.action === 'sprint' && g.sprint.latch), tint);
+    // the sprint button wears the stamina bar as a ring, so a thumb never has to look away
+    if (b.action === 'sprint') {
+      const sp = g.sprint;
+      const p = clamp(sp.bar / SPRINT.max, 0, 1);
+      ctx.save();
+      ctx.strokeStyle = sp.winded ? (Math.floor(g.time * 8) % 2 ? '#e04a5a' : '#8a1a2a')
+        : p < SPRINT.windedUntil ? '#f0a03a' : '#8ad84a';
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = p < 1 || sp.winded ? 0.95 : 0.45;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r + 2, -Math.PI / 2, -Math.PI / 2 + p * Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
   }
   for (const b of TOP_BUTTONS) {
     drawPadButton(ctx, b, touch.down(b.action));

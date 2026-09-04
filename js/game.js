@@ -1,6 +1,6 @@
 // Game orchestration: modes, areas, camera, spawning, combat, triggers, economy.
 import { VIEW_W, VIEW_H, TILE, SWORD_DMG, ARROWS, ARROW_TYPES, VESSEL_COSTS, HEART_PER_SHARD,
-  CRAYFISH_HEAL, AMMO_CAPS, MAX_LEVEL, SHIELD_REFLECT, PLAYER, TELEPORT, DEBUG, SIDE_QUESTS } from './config.js';
+  CRAYFISH_HEAL, AMMO_CAPS, MAX_LEVEL, SHIELD_REFLECT, PLAYER, TELEPORT, SPRINT, DEBUG, SIDE_QUESTS } from './config.js';
 import { clamp, dist, aabb, lerp } from './util.js';
 import { T, drawTileTo, buildTileAtlas, isSolid } from './tiles.js';
 import { buildOverworld, REGION, LM } from './worldgen.js';
@@ -61,6 +61,9 @@ export class Game {
     this.portraitHintT = 0;
     this.wasPortrait = false;
     this.warpT = 0;         // seconds the warp-home button has been held
+    // Sprint stamina. Kept here rather than on the Player, which is rebuilt on every area
+    // load -- otherwise stepping through a door would be a free refill.
+    this.sprint = { bar: SPRINT.max, rest: 0, winded: false, latch: false };
     this.slot = 0;          // which save file is in play
     this.slots = [];        // cached slot summaries for the file-select screen
     this.fileErase = null;  // slot index awaiting erase confirmation
@@ -436,6 +439,7 @@ export class Game {
   }
   respawn() {
     this.state.hp = this.state.maxHp;
+    this.sprint = { bar: SPRINT.max, rest: 0, winded: false, latch: false };
     // losing in the arena ends the run and puts you out front; winnings are already banked
     if (this.area.isArena) {
       const [tx, ty] = LM.arenaGate;

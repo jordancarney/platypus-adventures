@@ -18,6 +18,7 @@ export const KEYMAP = {
   Space: 'sword', KeyJ: 'sword', KeyZ: 'sword',
   KeyK: 'bow', KeyX: 'bow',
   KeyL: 'shield', KeyC: 'shield', ShiftLeft: 'shield', ShiftRight: 'shield',
+  KeyV: 'sprint', Semicolon: 'sprint',
   KeyQ: 'cycleL', KeyR: 'cycleR',
   KeyE: 'interact', Enter: 'interact',
   KeyT: 'teleport', KeyH: 'teleport',
@@ -44,6 +45,18 @@ export const PLAYER = {
   arrowSpeed: 250,
   arrowRange: 130,      // px before an arrow despawns
   baseAmmoCap: 30,
+};
+
+// --- sprint / stamina ---
+// Gus can put on a burst of speed for as long as the stamina bar lasts. It refills on its
+// own once he eases off; running it dry leaves him winded, unable to sprint until the bar
+// is part-way back, so the bar is worth watching rather than mashing.
+export const SPRINT = {
+  mult: 1.55,          // speed multiplier while sprinting, on land and in water alike
+  max: 3.2,            // seconds of sprint on a full bar
+  regen: 0.7,          // bar-seconds recovered per second while not sprinting
+  regenDelay: 0.6,     // pause before recovery starts once sprinting stops
+  windedUntil: 0.35,   // an emptied bar must refill to this fraction before sprinting again
 };
 
 export const MAX_LEVEL = 6;   // every upgrade track tops out here

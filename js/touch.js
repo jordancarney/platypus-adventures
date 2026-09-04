@@ -18,6 +18,8 @@ export const PAD_BUTTONS = [
   { action: 'shield', x: 374, y: 156, r: 16, icon: 'shield' },
   { action: 'interact', x: 300, y: 198, r: 14, icon: 'E' },
   { action: 'cycleR', x: 378, y: 118, r: 12, icon: 'arrow' },
+  // a tap latches sprint on (see Player.updateSprint), so it needn't sit under the thumb
+  { action: 'sprint', x: 336, y: 126, r: 14, icon: 'run' },
 ];
 
 // Spaced 40px apart so the padded hit zones (r + HIT_PAD = 18) can't overlap.

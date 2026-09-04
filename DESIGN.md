@@ -21,6 +21,11 @@ Primal Chimera.
 - **Shield** (from Elder Mirri): hold to block frontal hits; upgrades widen block/deflect projectiles.
 - **Bow** (chest in Billabong Village): fires the selected arrow type; uses one shared ammo pool.
 - **Armor**: levels 1–6, reduces damage, visually tints Gus.
+- **Sprint** (hold V / `;`, or the `>>` touch button): 1.55x speed on land or in water for as
+  long as the stamina bar lasts (3.2 s). The bar refills on its own after a short pause; run
+  it dry and Gus is *winded* -- no sprinting until it climbs back past a third. The bar only
+  appears in the HUD while it's below full. Tuning lives in `SPRINT` (config.js); the bar
+  itself lives on the Game object, not the Player, so an area load is never a free refill.
 - **Health**: starts at 3 hearts (1 heart = 2 HP), grows via Heart Vessels bought with diamonds,
   plus one per Key Shard. Max 20 (see [Economy](#economy-baseline-prices)).
 
@@ -43,11 +48,14 @@ Every upgrade track tops out at **Lv 6** (`MAX_LEVEL` in [js/config.js](js/confi
 Touch is a first-class input, not a fallback: on-screen controls fade in on first touch and
 retire when a key is pressed. Movement uses a floating thumbstick (origin = wherever the thumb
 lands in the lower-left), the sword auto-repeats while held, and every menu is tappable. Warp
-home must be *held*, with a ring filling as it charges, so it can't fire by accident.
+home must be *held*, with a ring filling as it charges, so it can't fire by accident. Sprint
+is the opposite: on touch a *tap latches it on* (the right thumb can't hold a button and still
+reach the sword), dropping when Gus stops or runs dry, with a second tap to cancel; the button
+wears the stamina bar as a ring. On a keyboard it's a plain hold.
 
 Bindings live in `KEYMAP` ([js/config.js](js/config.js)) and reach players through the Controls
-page in the pause menu, which renders from those same bindings — so there is no hand-maintained
-list anywhere to fall out of sync. Touch layout constants are in [js/touch.js](js/touch.js).
+page in the pause menu ([js/ui.js](js/ui.js) `drawPause`), which lists them by hand — keep the
+two in step when adding an action. Touch layout constants are in [js/touch.js](js/touch.js).
 
 ## Currencies & pickups
 

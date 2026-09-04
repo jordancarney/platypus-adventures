@@ -75,6 +75,7 @@ const SFX = {
   warp:   () => { noise({ dur: 0.5, vol: 0.3 }); [440, 660, 990, 1480, 2100].forEach((f, i) => tone({ f, f2: f * 1.6, dur: 0.2, type: 'triangle', vol: 0.3, at: i * 0.06 })); },
   warpIn: () => { [2100, 1480, 990, 660].forEach((f, i) => tone({ f, f2: f * 0.7, dur: 0.14, type: 'triangle', vol: 0.26, at: i * 0.05 })); noise({ dur: 0.3, vol: 0.18 }); },
   warpOff:() => tone({ f: 420, f2: 150, dur: 0.16, type: 'triangle', vol: 0.22 }),
+  winded: () => { noise({ dur: 0.2, vol: 0.2, low: true }); tone({ f: 320, f2: 170, dur: 0.18, type: 'triangle', vol: 0.16 }); },
   fanfare:() => { [392, 392, 392, 523, 659, 784].forEach((f, i) => tone({ f, dur: i === 5 ? 0.4 : 0.11, type: 'square', vol: 0.32, at: i * 0.11 })); },
   stairs: () => { [700, 560, 450, 360].forEach((f, i) => tone({ f, dur: 0.09, type: 'triangle', vol: 0.3, at: i * 0.07 })); },
 };

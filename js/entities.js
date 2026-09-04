@@ -1,12 +1,12 @@
 // Player, projectiles, pickups, chests, props, push blocks.
 import { TILE, PLAYER, SWORD_LOOK, SHIELD_LOOK, ARMOR_REDUCE, SHIELD_ARC, SHIELD_SLOW, BOW_COOLDOWN, BOW_POWER,
-  ARROWS, BURN, FREEZE_TIME, CHAIN_TARGETS, BOMB_RADIUS, CRAYFISH_HEAL, DROPS, tierCoins } from './config.js';
+  ARROWS, BURN, FREEZE_TIME, CHAIN_TARGETS, BOMB_RADIUS, CRAYFISH_HEAL, DROPS, SPRINT, tierCoins } from './config.js';
 import { clamp, aabb, dist, dirTo, DIRS } from './util.js';
 import { T, props as tileProps } from './tiles.js';
 import { drawSprite } from './pixelart.js';
 import { input } from './input.js';
 import { audio } from './audio.js';
-import { buzz } from './touch.js';
+import { touch, buzz } from './touch.js';
 
 let NEXT_ID = 1;
 
@@ -166,6 +166,7 @@ export class Player extends Entity {
     if (tp.slow) speed *= PLAYER.slowMult;
     if (this.blocking) speed *= SHIELD_SLOW[clamp(st.shield, 0, 6)];
     if (this.attackT > 0) speed *= 0.4;
+    if (this.updateSprint(g, dt, ax, ay)) speed *= SPRINT.mult;
 
     let dx = ax * speed * dt + this.knockx * dt;
     let dy = ay * speed * dt + this.knocky * dt;
@@ -198,7 +199,36 @@ export class Player extends Entity {
     if (input.pressed('cycleR')) g.cycleArrow(1);
     for (let i = 1; i <= 6; i++) if (input.pressed('slot' + i)) g.selectArrowSlot(i - 1);
 
-    this.animT += dt * (this.moving ? 1 : 0.4);
+    // feet go faster on a sprint, so the bounce reads as running
+    this.animT += dt * (this.moving ? (this.sprinting ? 1.7 : 1) : 0.4);
+  }
+
+  // Sprint is a hold on the keyboard. On touch a tap *latches* it, because the right thumb
+  // can't keep a button down and still reach the sword; the latch drops when Gus stops or
+  // the bar runs dry, and a second tap cancels it early. Returns whether he's sprinting.
+  updateSprint(g, dt, ax, ay) {
+    const sp = g.sprint;
+    if (touch.pressed('sprint')) sp.latch = !sp.latch;
+    if (!this.moving || sp.bar <= 0) sp.latch = false;
+    const want = this.moving && !this.blocking && (sp.latch || input.down('sprint'));
+    const sprinting = want && !sp.winded && sp.bar > 0;
+    if (sprinting) {
+      sp.bar = Math.max(0, sp.bar - dt);
+      sp.rest = SPRINT.regenDelay;
+      if (sp.bar <= 0) { sp.winded = true; sp.latch = false; audio.sfx('winded'); }
+      // dust (or spray) kicked up behind his feet
+      if (Math.random() < dt * 16) {
+        g.addParticle(this.cx - ax * 4 + (Math.random() - 0.5) * 5, this.bottom + 1 + (Math.random() - 0.5) * 2,
+          this.swimming ? '#bfe8f2' : '#d8c8a0', 0.25 + Math.random() * 0.2,
+          -ax * 22, -ay * 22 - 5, Math.random() < 0.4 ? 2 : 1);
+      }
+    } else {
+      sp.rest = Math.max(0, sp.rest - dt);
+      if (sp.rest <= 0) sp.bar = Math.min(SPRINT.max, sp.bar + SPRINT.regen * dt);
+      if (sp.winded && sp.bar >= SPRINT.max * SPRINT.windedUntil) sp.winded = false;
+    }
+    this.sprinting = sprinting;
+    return sprinting;
   }
 
   // Sparks are thrown along the swing arc; higher tiers throw more of them.
