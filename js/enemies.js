@@ -2,7 +2,7 @@
 import { tierHp, tierDmg, BURN } from './config.js';
 import { clamp, dist, dirTo } from './util.js';
 import { Entity, moveEntity, spawnDrops, EnemyShot } from './entities.js';
-import { drawSprite } from './pixelart.js';
+import { drawSprite, frameName } from './pixelart.js';
 import { audio } from './audio.js';
 
 // ---------------------------------------------------------------- helpers
@@ -366,11 +366,15 @@ export class Enemy extends Entity {
       return;
     }
     const bob = this.fly ? Math.sin(g.time * 6 + this.id) * 2 - 6 : 0;
-    const squash = this.fly ? 0 : (Math.sin(g.time * 9 + this.id) + 1) / 2 * (Math.abs(this.vx) + Math.abs(this.vy) > 5 ? 1 : 0.2);
+    const moving = Math.abs(this.vx) + Math.abs(this.vy) > 5;
+    const squash = this.fly ? 0 : (Math.sin(g.time * 9 + this.id) + 1) / 2 * (moving ? 1 : 0.2);
     const opts = { flip: this.vx < 0, squash, flash: this.flashT > 0, angle: this.spinA || 0 };
     if (this.frozenT > 0) opts.tint = '#7ad4ff';
     if (this.state === 'telegraph') opts.flash = Math.floor(g.time * 10) % 2 === 0;
-    drawSprite(ctx, this.sprite, this.cx, this.bottom + 2 + bob, opts);
+    // fliers flap and swimmers wag the whole time; walkers only stride while moving.
+    // Frozen enemies hold their pose.
+    const cycle = this.frozenT > 0 ? 0 : this.fly ? g.time * 7 : this.aquatic ? g.time * 3 : moving ? g.time * 8 : 0;
+    drawSprite(ctx, frameName(this.sprite, cycle && cycle + this.id), this.cx, this.bottom + 2 + bob, opts);
     if (this.frozenT > 0) {
       ctx.save(); ctx.globalAlpha = 0.35; ctx.fillStyle = '#bfe8f2';
       ctx.fillRect(this.x - 2, this.y - 10, this.w + 4, this.h + 12);
@@ -633,7 +637,11 @@ export class Boss extends Entity {
       ctx.beginPath(); ctx.arc(this.cx, this.cy - 8, 34, 0, 7); ctx.fill();
       ctx.restore();
     }
-    drawSprite(ctx, this.sprite, this.cx, this.bottom + 4 + bob, opts);
+    // Apexus beats its wings constantly; the others animate like their smaller kin
+    const winged = this.fly || this.type === 'boss_apexus';
+    const moving = Math.abs(this.vx) + Math.abs(this.vy) > 5;
+    const cycle = this.frozenT > 0 || this.stunned > 0 ? 0 : winged ? g.time * 5 : this.aquatic ? g.time * 3 : moving ? g.time * 7 : 0;
+    drawSprite(ctx, frameName(this.sprite, cycle), this.cx, this.bottom + 4 + bob, opts);
     if (this.fly) {
       ctx.save(); ctx.globalAlpha = 0.25; ctx.fillStyle = '#000';
       ctx.beginPath(); ctx.ellipse(this.cx, this.bottom + 4, 12, 4, 0, 0, 7); ctx.fill();

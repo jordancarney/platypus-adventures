@@ -255,6 +255,12 @@ that gives the shop and shrine economies somewhere to draw from once the overwor
 - Vanilla JS ES modules, HTML5 Canvas 2D, zero dependencies, no build step.
 - Internal resolution 400×240 (16px tiles), integer-scaled with `image-rendering: pixelated`.
 - All art generated in code: ASCII pixel maps for creatures/items, procedural tile atlas.
+  Maps use a small palette convention ([js/pixelart.js](js/pixelart.js)): an uppercase
+  letter is the auto-derived highlight of its lowercase key, and a def's `shade` table
+  derives darker tones (`s: ['b', -0.3]`) *after* a palette variant's overrides, so an
+  elite recolor only swaps the base tones and every highlight, shadow and outline follows.
+  Creatures carry an optional `map2` second pose (leg stride, wing downstroke, tail wag,
+  tongue flick) built as `<name>_2` for every variant; `frameName()` picks the frame.
 - WebAudio-synthesized SFX and looping chiptune tracks per region.
 - Save: `localStorage` (autosave on transitions + statue).
 - Deploys as static files from repo root → GitHub Pages ready.
