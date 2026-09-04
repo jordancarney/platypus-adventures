@@ -421,9 +421,12 @@ export class Game {
     }
     const n = st.shards;
     const tail = n >= 4 ? 'The Great Gate awaits to the north!' : 'The predators of the Vale grow bolder...';
+    // The shard's light carries Gus straight back to the village hub rather than dropping
+    // him at the dungeon door: every next stop (shop, shrine, the next dungeon's road) is
+    // one road away from the plaza, and it saves a long walk back through the region.
     this.setBanner(`KEY SHARD  ${n} / 4`,
       gained ? `+${gained} heart!  ${tail}` : tail, '#7ae0f0',
-      () => this.exitDungeon());
+      () => this.warpHome("The shard's light carries you home!"));
     this.save();
   }
   onPlayerDeath() {
@@ -1152,7 +1155,7 @@ export class Game {
     }
   }
 
-  warpHome() {
+  warpHome(msg = 'Warped home to Billabong Village!') {
     this.warpT = 0;
     audio.sfx('warp');
     this.shake(5, 0.45);
@@ -1164,7 +1167,7 @@ export class Game {
     audio.sfx('warpIn');
     this.burst(this.player.cx, this.player.cy - 4, '#c8a0ff', 22);
     this.burst(this.player.cx, this.player.cy - 4, '#7ad4ff', 14);
-    this.toast('Warped home to Billabong Village!');
+    this.toast(msg);
     this.save();
   }
 

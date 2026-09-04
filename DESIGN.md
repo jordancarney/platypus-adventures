@@ -114,7 +114,10 @@ so the four element dungeons can be tackled in **any order** and stay challengin
 
 Room-based (each room = one 25×15-tile screen, camera locks per room, Zelda 1 style).
 Small keys, floor plates, eye switches, kill-all rooms, push blocks, a **Big Fang** (boss key),
-a miniboss, an elemental arrow chest, and a boss guarding the **Key Shard**.
+a miniboss, an elemental arrow chest, and a boss guarding the **Key Shard**. Picking up the
+shard shows the KEY SHARD banner and then warps Gus straight back to the Billabong Village
+plaza (the same `warpHome()` as the held warp button, with its effects), rather than leaving
+him at the dungeon door -- the shop, shrine and every other dungeon's road start there.
 
 1. **Molten Maw** (Fire, NE) — lava channels, flame jets. Boss: **Scorchjaw, Croc-Dragon** —
    charge attacks, fire-breath sweeps; stunned when he charges a wall.
