@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gus · Art workshop</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#19232d;color:#e7dec9;font:14px system-ui,sans-serif}main{max-width:1120px;margin:auto;padding:32px}h1{font-size:30px;margin:4px 0 8px}h2{font-size:16px;margin:28px 0 12px}p{color:#a7bab9;margin:8px 0 20px}.eyebrow{color:#d9b86e;font-size:11px;letter-spacing:3px}a{color:#99c9bd}button,select{font:inherit;color:#e7dec9;background:#2b3b46;border:1px solid #546774;padding:8px 12px;border-radius:4px}header{display:flex;justify-content:space-between;align-items:center;gap:16px}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}.card{background:#273640;text-align:center;padding:12px 4px 8px;border:1px solid #394b54;border-radius:4px}.card canvas{display:block;width:80px;height:80px;margin:auto;image-rendering:pixelated}.card span{display:block;color:#b8cac5;font-size:11px;margin-top:8px}.scene{display:block;width:100%;image-rendering:pixelated;background:#1c2634}#scenes{display:grid;grid-template-columns:1fr 1fr;gap:16px}.tiles{width:100%;image-rendering:pixelated;display:block}#checks{color:#9fceb0;font-size:12px}label{display:inline-flex;gap:10px;align-items:center}@media(max-width:650px){main{padding:16px}header{display:block}#scenes{grid-template-columns:1fr}}
+</style>
+<main>
+<header><div><div class="eyebrow">PLATYPUS ADVENTURES</div><h1>Gus · Art workshop</h1><p>Living sprites, equipment and the textures of Billabong Vale.</p></div><a href="../index.html">Play the game ↗</a></header>
+<label><input id="animate" type="checkbox" checked> Animate</label> <label>Dungeon <select id="theme"><option>water</option><option>fire</option><option>air</option><option>earth</option><option>nexus</option><option>arena</option></select></label>
+<h2>In the world</h2><div id="scenes"><canvas id="vale" class="scene" width="240" height="144"></canvas><canvas id="dungeon" class="scene" width="240" height="144"></canvas></div>
+<h2>Gus & his gear</h2><div id="hero" class="grid"></div>
+<h2>Wildlife & elemental fangs</h2><div id="enemies" class="grid"></div>
+<h2>Weapons & treasures</h2><div id="items" class="grid"></div>
+<h2>Terrain atlas</h2><canvas id="tiles" class="tiles" width="512" height="128"></canvas>
+<p id="checks">Checking art…</p>
+</main>
+<script type="module" src="./art.js"></script>
+</html>

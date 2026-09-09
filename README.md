@@ -40,6 +40,11 @@ Then open http://localhost:8642 — or use `npx serve`, VS Code Live Server, etc
 
 Open with `?debug=1` for dev cheats; [DESIGN.md](DESIGN.md) lists them.
 
+For art review, open [the art workshop](dev/art.html) on the same local server. It shows
+animated characters, all six gear tiers, sample environments and a theme selector, and checks
+every generated sprite and tile for missing palette colors. Artwork stays on the native
+16-pixel grid, with warm highlights, cool outlines and quieter terrain behind the characters.
+
 ## Deploys
 
 The repo root is the site — no build step, no dependencies:

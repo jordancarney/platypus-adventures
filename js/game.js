@@ -1563,7 +1563,8 @@ export class Game {
     const t0y = Math.max(0, Math.floor(cy / TILE)), t1y = Math.min(this.area.h - 1, Math.ceil((cy + VIEW_H) / TILE));
     for (let ty = t0y; ty <= t1y; ty++) {
       for (let tx = t0x; tx <= t1x; tx++) {
-        drawTileTo(ctx, this.area.theme, this.area.get(tx, ty), tx * TILE, ty * TILE, this.time);
+        drawTileTo(ctx, this.area.theme, this.area.get(tx, ty), tx * TILE, ty * TILE, this.time,
+          [this.area.get(tx, ty - 1), this.area.get(tx + 1, ty), this.area.get(tx, ty + 1), this.area.get(tx - 1, ty)]);
       }
     }
 

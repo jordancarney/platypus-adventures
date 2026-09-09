@@ -3,7 +3,7 @@ import { TILE, PLAYER, SWORD_LOOK, SHIELD_LOOK, ARMOR_REDUCE, SHIELD_ARC, SHIELD
   ARROWS, BURN, FREEZE_TIME, CHAIN_TARGETS, BOMB_RADIUS, CRAYFISH_HEAL, DROPS, SPRINT, tierCoins } from './config.js';
 import { clamp, aabb, dist, dirTo, DIRS } from './util.js';
 import { T, props as tileProps } from './tiles.js';
-import { drawSprite } from './pixelart.js';
+import { drawSprite, sprites } from './pixelart.js';
 import { input } from './input.js';
 import { audio } from './audio.js';
 import { touch, buzz } from './touch.js';
@@ -112,7 +112,7 @@ export class Player extends Entity {
     this.facing = 'down';
     this.flip = false;          // sprite faces right by default
     this.iframes = 0;
-    this.swordCd = 0; this.bowCd = 0;
+    this.swordCd = 0; this.bowCd = 0; this.bowPoseT = 0;
     this.attackT = 0;           // >0 while slashing
     this.slashId = 0;           // increments per swing so each slash hits once
     this.blocking = false;
@@ -139,6 +139,7 @@ export class Player extends Entity {
     this.iframes = Math.max(0, this.iframes - dt);
     this.swordCd = Math.max(0, this.swordCd - dt);
     this.bowCd = Math.max(0, this.bowCd - dt);
+    this.bowPoseT = Math.max(0, this.bowPoseT - dt);
     this.attackT = Math.max(0, this.attackT - dt);
     this.blockFlash = Math.max(0, (this.blockFlash || 0) - dt);
 
@@ -257,6 +258,7 @@ export class Player extends Entity {
     st.arrows.ammo -= info.cost;
     const bl = clamp(st.bow, 0, 6);
     this.bowCd = PLAYER.bowCooldown * BOW_COOLDOWN[bl];
+    this.bowPoseT = 0.18;
     const [dx, dy] = DIRS[this.facing];
     const lvl = owned.level;
     const range = PLAYER.arrowRange * BOW_POWER[bl];
@@ -302,6 +304,11 @@ export class Player extends Entity {
     let name = 'gus_idle';
     if (this.swimming) name = 'gus_swim';
     else if (this.moving) name = Math.floor(this.animT * 8) % 2 ? 'gus_walk1' : 'gus_walk2';
+    if (!this.swimming) {
+      ctx.fillStyle = '#25324155';
+      ctx.fillRect(Math.round(cx) - 5, Math.round(by) - 2, 10, 2);
+      ctx.fillRect(Math.round(cx) - 3, Math.round(by), 6, 1);
+    }
     drawSprite(ctx, name, cx, by, { flip: this.flip });
     // worn armor is a real overlay on the same grid; skipped while swimming since the
     // swim sprite is a different pose
@@ -309,6 +316,15 @@ export class Player extends Entity {
 
     // shield: braced in front, with a tier aura and an impact flare when it eats a hit
     if (this.blocking) this.drawShield(ctx, SHIELD_LOOK[clamp(st.shield, 1, 6)], cx, by, g);
+    if (this.bowPoseT > 0 && !this.swimming && !this.blocking && this.attackT <= 0) {
+      const [fx, fy] = DIRS[this.facing];
+      ctx.save();
+      ctx.translate(Math.round(cx + fx * 9), Math.round(this.cy - 3 + fy * 8));
+      ctx.rotate(Math.atan2(fy, fx));
+      const bow = sprites['bow' + clamp(st.bow, 1, 6)];
+      ctx.drawImage(bow.canvas, -4, -6);
+      ctx.restore();
+    }
     // the sword is only drawn while swinging
     if (this.attackT > 0) this.drawSlash(ctx, SWORD_LOOK[clamp(st.sword, 1, 6)], cx);
   }
@@ -378,31 +394,12 @@ export class Player extends Entity {
       ctx.arc(ox + Math.cos(ang) * look.len * 0.75, oy + Math.sin(ang) * look.len * 0.75, look.w + 3, 0, 7);
       ctx.fill();
     }
-    // Blade only — no hilt. A crossguard and grip at the pivot sit inside Gus's body and
-    // read as clutter, so the swing is just the arcing blade: full width at the base,
-    // tapering to a hot tip.
+    // Small wrapped grip, metal crossguard and beveled blade share the item artwork.
     ctx.globalAlpha = 1;
     ctx.translate(Math.round(ox), Math.round(oy));
     ctx.rotate(ang);
-    const L = look.len;
-    const W = look.w, Wt = Math.max(1, W - 1);         // base and tip thickness
-    const top = -(W >> 1), topT = -(Wt >> 1);
-    const b0 = 5;                                      // starts clear of his body
-    const knee = Math.round(b0 + (L - b0) * 0.6);      // where the taper begins
-    // dark silhouette so the blade reads against any background
-    ctx.fillStyle = look.dark;
-    ctx.fillRect(b0 - 1, top - 1, knee - b0 + 2, W + 2);
-    ctx.fillRect(knee, topT - 1, L - knee, Wt + 2);
-    // metal core
-    ctx.fillStyle = look.core;
-    ctx.fillRect(b0, top, knee - b0 + 1, W);
-    ctx.fillRect(knee, topT, L - knee - 1, Wt);
-    // lit leading edge running the length of it
-    ctx.fillStyle = look.edge;
-    ctx.fillRect(b0, top, knee - b0 + 1, 1);
-    ctx.fillRect(knee, topT, L - knee - 1, 1);
-    // glinting point
-    ctx.fillRect(L - 2, topT, 2, Math.max(1, Wt));
+    const blade = sprites['sword' + SWORD_LOOK.indexOf(look)];
+    ctx.drawImage(blade.canvas, 0, -4);
     ctx.restore();
   }
 }
@@ -467,10 +464,8 @@ export class Arrow extends Entity {
     ctx.save();
     ctx.translate(this.cx, this.cy);
     ctx.rotate(Math.atan2(this.dy, this.dx));
-    ctx.fillStyle = '#8a6a3a';
-    ctx.fillRect(-5, -1, 8, 2);
-    ctx.fillStyle = ARROWS[this.type].color;
-    ctx.fillRect(3, -2, 4, 4);
+    const arrow = sprites['arrow_' + this.type];
+    ctx.drawImage(arrow.canvas, -6, -2);
     ctx.restore();
   }
 }

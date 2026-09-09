@@ -12,72 +12,73 @@
 //   - Creatures derive their outline 'd' from the body 'b' for the same reason: an elite
 //     with a blue coat gets a navy outline rather than the base animal's brown one.
 
+import { SWORD_LOOK, ARROWS } from './config.js';
+
 const DEFS = {};
 
 // ---------- GUS THE PLATYPUS ----------
 // 16x16, lit from the top-left: highlights ride the crown of the head, the top of the
 // bill and the upper belly; shade pools under the chin, along the flank and under the bill.
 const GUS_COLORS = {
-  d: '#4a2a12', b: '#8c5a30', l: '#d4a468', o: '#e8a838',
-  e: '#14100c', w: '#f7f2e2', t: '#5a3818', f: '#d08a30',
+  d: '#302638', b: '#946044', l: '#e2b879', o: '#e9ad52',
+  e: '#201d2c', w: '#fff3d6', t: '#664450', f: '#c78c46', m: '#388c86',
 };
 const GUS_SHADE = { s: ['b', -0.32], p: ['o', -0.3], k: ['l', -0.22], u: ['t', 0.35] };
 DEFS.gus_idle = { colors: GUS_COLORS, shade: GUS_SHADE, map: [
   '.....ddddd......',
-  '....dBBBbbd.....',
+  '....dBBbbbd.....',
   '...dBBbbbbbd....',
-  '...dbbbbbbwed...',
-  '...dbbbbbbeedOOO',
-  '....dbbbbbdpoooo',
-  '....dbbbbbbdpppp',
-  '...dbBLLLlbbd...',
+  '...dbbbbwwed....',
+  '...dbbbbweedddd.',
+  '....dbbbdOOoood.',
+  '....dbbbbdpppd..',
+  '...dbmMMmmbbd...',
   '...dbLLlllkbbd..',
-  '..udblllllkbbd..',
-  '.uudbllllkkbbd..',
+  '..udbLllllkbbd..',
+  '.uutbllllkkbbd..',
   'uutdbbllkbbbsd..',
-  'tttdbsbbbbbssd..',
+  'utudbsbbbbbssd..',
   '.ttddssbbbbsdd..',
-  '..t..ffF.ffF....',
+  '..t..fFF.ffF....',
   '....FFFf.FFFf...',
 ]};
-// Walk cycle: feet apart with the tail swung up, then feet together with the whole body
-// lifted a pixel (the blank bottom row) and the tail swung down -- a bounce, not a shuffle.
+// Walk cycle: two planted strides with a swinging, crosshatched paddle tail.
+// Both frames keep the torso on the same 16x16 grid so every armor tier stays registered.
 DEFS.gus_walk1 = { colors: GUS_COLORS, shade: GUS_SHADE, map: [
   '.....ddddd......',
-  '....dBBBbbd.....',
+  '....dBBbbbd.....',
   '...dBBbbbbbd....',
-  '...dbbbbbbwed...',
-  '...dbbbbbbeedOOO',
-  '....dbbbbbdpoooo',
-  '....dbbbbbbdpppp',
-  '...dbBLLLlbbd...',
+  '...dbbbbwwed....',
+  '...dbbbbweedddd.',
+  '....dbbbdOOoood.',
+  '....dbbbbdpppd..',
+  '...dbmMMmmbbd...',
   '.uudbLLlllkbbd..',
-  'uuudblllllkbbd..',
-  'uttdbllllkkbbd..',
+  'uutdbLllllkbbd..',
+  'utudbllllkkbbd..',
   '.ttdbbllkbbbsd..',
   '..tdbsbbbbbssd..',
-  '...ddssbbbbsdd..',
-  '...ffF.....ffF..',
+  '.ttddssbbbbsdd..',
+  '...fFF.....ffF..',
   '..FFFf.....FFFf.',
 ]};
 DEFS.gus_walk2 = { colors: GUS_COLORS, shade: GUS_SHADE, map: [
   '.....ddddd......',
-  '....dBBBbbd.....',
+  '....dBBbbbd.....',
   '...dBBbbbbbd....',
-  '...dbbbbbbwed...',
-  '...dbbbbbbeedOOO',
-  '....dbbbbbdpoooo',
-  '....dbbbbbbdpppp',
-  '...dbBLLLlbbd...',
+  '...dbbbbwwed....',
+  '...dbbbbweedddd.',
+  '....dbbbdOOoood.',
+  '....dbbbbdpppd..',
+  '...dbmMMmmbbd...',
   '...dbLLlllkbbd..',
-  '...dblllllkbbd..',
+  '...dbLllllkbbd..',
   '...dbllllkkbbd..',
   '..udbbllkbbbsd..',
   '.uudbsbbbbbssd..',
-  'uutddssbbbbsdd..',
-  'ttt..ffF.ffF....',
+  'utuddssbbbbsdd..',
+  'utt..fFF.ffF....',
   '.tt.FFFf.FFFf...',
-  '................',
 ]};
 // ---------- ARMOR OVERLAYS ----------
 // Same 16x16 grid as the Gus sprites, so these register pixel-for-pixel on top of him.
@@ -93,10 +94,10 @@ DEFS.armor1 = { colors: { v: '#5f8f45', h: '#8ab868' }, shade: { k: ['v', -0.3] 
   '................',
   '................',
   '....vVVVvvvv....',
-  '....vhvhvhvkv...',
-  '....hvhvhvhvk...',
-  '....vhvhvhvkv...',
-  '....kvhvhvvkk...',
+  '....vhhvvvkvv...',
+  '....vhvvhvvkv...',
+  '....vvvvhvvkv...',
+  '....kvvvvvvkk...',
   '.....kkkkkkk....',
   '................',
   '................',
@@ -111,10 +112,10 @@ DEFS.armor2 = { colors: { m: '#5a7a9a', h: '#8aa8c8', d: '#3a5270' }, shade: { k
   '................',
   '................',
   '..hdmMMmmmmmdh..',
-  '...dmhmhmhmhkd..',
-  '....hmhmhmhmk...',
-  '....mhmhmhmhk...',
-  '....khmhmhmkk...',
+  '...dmhhhmmmkd...',
+  '....hmhmmmhmk...',
+  '....mmhmhmmmk...',
+  '....kmmmmmmkk...',
   '.....kmmmmkk....',
   '................',
   '................',
@@ -195,13 +196,13 @@ DEFS.armor6 = { colors: { s: '#d8d4c8', h: '#ffffff', g: '#f0c83a', c: '#7ad4ff'
 
 DEFS.gus_swim = { colors: { ...GUS_COLORS, r: '#bfe8f2' }, shade: GUS_SHADE, map: [
   '.....ddddd......',
-  '....dBBBbbd.....',
+  '....dBBbbbd.....',
   '...dBBbbbbbd....',
-  '...dbbbbbbwed...',
-  '...dbbbbbbeedOOO',
-  '....dbbbbbdpoooo',
-  '....dbbbbbbdpppp',
-  'R..dbBLLLlbbd.R.',
+  '...dbbbbwwed....',
+  '...dbbbbweedddd.',
+  '....dbbbdOOoood.',
+  '....dbbbbdpppd..',
+  'R..dbmMMmmbbd.R.',
   'rrrdbLLlllkbbdrr',
   '.RrrrrrRrrrrrrR.',
 ]};
@@ -212,34 +213,34 @@ DEFS.gus_swim = { colors: { ...GUS_COLORS, r: '#bfe8f2' }, shade: GUS_SHADE, map
 const BODY_SHADE = { d: ['b', -0.62], s: ['b', -0.3], k: ['l', -0.22] };
 DEFS.rodent = { colors: { b: '#6b4a2f', l: '#c7b299', t: '#8a6a4a', e: '#111', o: '#e08a90', f: '#3a2a1c' }, shade: BODY_SHADE, map: [
   '..........dd.dd.',
-  'tT........dbdbd.',
-  '.tT.......dBBbbd',
-  '..tT.....dbbbbed',
-  '...tt.ddddBbbbbo',
-  '....ddbBBbbbbbd.',
+  '..........dodbod',
+  '.tt.......dBBbbd',
+  '.tTt.....dbblbed',
+  '..tTt.ddddBbbbbo',
+  '...ttdbBBbbblld.',
   '....dbblllbbbsd.',
   '.....dbslllsbd..',
   '.....ddbsbsbd...',
   '......ff.dff....',
 ], map2: [
   '..........dd.dd.',
-  'tT........dbdbd.',
-  '.tT.......dBBbbd',
-  '..tT.....dbbbbed',
+  '.tt.......dodbod',
+  '.tTt......dBBbbd',
+  '..tTt....dbblbed',
   '...tt.ddddBbbbbo',
-  '....ddbBBbbbbbd.',
+  '....ddbBBbbblld.',
   '....dbblllbbbsd.',
   '.....dbslllsbd..',
   '.....ddbsbsbd...',
-  '.....ff...dff...'
+  '.....ff...dff...',
 ]};
 DEFS.canine = { colors: { b: '#c28a4a', l: '#e8d3ae', t: '#a06c34', e: '#111', o: '#211510', f: '#39251a' }, shade: BODY_SHADE, map: [
   '............d.d..',
   '...........dbdbd.',
   'tT.........dBbBd.',
-  'tTt.....ddddbbbed',
+  'tTt.....ddddblbed',
   '.tTt..ddbBBbbbbbo',
-  '..tt.dbbBbbbbbbdd',
+  '..tt.dbbBBbbbllld',
   '...tdbbbbbbbbsdd.',
   '....dbblllllbsd..',
   '....dbbllllkbd...',
@@ -250,9 +251,9 @@ DEFS.canine = { colors: { b: '#c28a4a', l: '#e8d3ae', t: '#a06c34', e: '#111', o
   '............d.d..',
   '...........dbdbd.',
   'tT.........dBbBd.',
-  'tTt.....ddddbbbed',
+  'tTt.....ddddblbed',
   '.tTt..ddbBBbbbbbo',
-  '..tt.dbbBbbbbbbdd',
+  '..tt.dbbBBbbbllld',
   '...tdbbbbbbbbsdd.',
   '....dbblllllbsd..',
   '....dbbllllkbd...',
@@ -264,9 +265,9 @@ DEFS.feline = { colors: { b: '#8d8078', l: '#cfc4b6', t: '#6e625a', e: '#c8e04a'
   '..........d..d..',
   '..tT......dbddbd',
   '.tTt......dBbbbd',
-  '.tt.....ddddbebd',
-  '.tt...ddbBBbbbbo',
-  '..t..dbbBbbbbbdd',
+  '.tt.....ddddlebd',
+  '.tt...ddbBBbblbo',
+  '..t..dbbBBbbblld',
   '...ddbbbbbbbbsd.',
   '....dbbllllbsd..',
   '....dbsllllbd...',
@@ -277,9 +278,9 @@ DEFS.feline = { colors: { b: '#8d8078', l: '#cfc4b6', t: '#6e625a', e: '#c8e04a'
   '..........d..d..',
   '..tT......dbddbd',
   '.tTt......dBbbbd',
-  '.tt.....ddddbebd',
-  '.tt...ddbBBbbbbo',
-  '..t..dbbBbbbbbdd',
+  '.tt.....ddddlebd',
+  '.tt...ddbBBbblbo',
+  '..t..dbbBBbbblld',
   '...ddbbbbbbbbsd.',
   '....dbbllllbsd..',
   '....dbsllllbd...',
@@ -339,10 +340,10 @@ DEFS.lizard = { colors: { b: '#707c34', s: '#4a521e', l: '#b8bf7a', e: '#e0c23a'
   '.....ff..ff..ff...'
 ]};
 DEFS.croc = { colors: { b: '#3f6e42', s: '#294d2c', l: '#9db86a', e: '#e0b23a', w: '#d8e8f0', f: '#1d3320' }, shade: { d: ['b', -0.62], k: ['l', -0.2] }, map: [
-  '.....dd...........',
-  '....dwwd..........',
-  '...dwWwd..........',
-  '...ddwd......dd...',
+  '..................',
+  '..................',
+  '....d..d..d.......',
+  '...dWddWddWd.dd...',
   '..dsBbdddddddbed..',
   '.dbBbbbBbbbBbbbbdd',
   'dbsbbsbbsbbsbbbbbb',
@@ -352,10 +353,10 @@ DEFS.croc = { colors: { b: '#3f6e42', s: '#294d2c', l: '#9db86a', e: '#e0b23a', 
   '..dbd.dbd.dbd.....',
   '..ff..ff..ff......',
 ], map2: [
-  '.....dd...........',
-  '....dwwd..........',
-  '...dwWwd..........',
-  '...ddwd......dd...',
+  '..................',
+  '..................',
+  '....d..d..d.......',
+  '...dWddWddWd.dd...',
   '..dsBbdddddddbed..',
   '.dbBbbbBbbbBbbbbdd',
   'dbsbbsbbsbbsbbbbbb',
@@ -371,8 +372,8 @@ DEFS.bird = { colors: { b: '#7a5a38', w: '#a8845a', l: '#d8c8a8', e: '#111', o: 
   'dWWd........dWWd',
   '.dWwwd....dwwWd.',
   '..dWwwwddwwwwd..',
-  '...dkwwbbbbwwkd.',
-  '....dkbBbebbkdoo',
+  '...dkwwBbbbwwkd.',
+  '....dkbBlbebkdoo',
   '....ddbllbbbdd..',
   '.....dbllsbd....',
   '......dbbbd.....',
@@ -384,7 +385,7 @@ DEFS.bird = { colors: { b: '#7a5a38', w: '#a8845a', l: '#d8c8a8', e: '#111', o: 
   '................',
   '......ddddd.....',
   '....ddbBbbbdd...',
-  '...dkbBbebbbkdoo',
+  '...dkbBlbebbkdoo',
   '..dWwdbllbbbdwwd',
   '.dWwwdbllsbdwwkd',
   'dWwwkddbbbddwkd.',
@@ -393,43 +394,43 @@ DEFS.bird = { colors: { b: '#7a5a38', w: '#a8845a', l: '#d8c8a8', e: '#111', o: 
 ]};
 DEFS.fish = { colors: { b: '#3f7a86', s: '#2a5860', l: '#9ecfd8', e: '#e0e858', o: '#12262a', n: '#2a5860' }, shade: { d: ['b', -0.62], k: ['l', -0.2] }, map: [
   '.......nNn.......',
-  '..ddddnnnbdd.....',
-  '.dBBbbbbbbbbdd...',
-  'dbebbBsbBsbbsbd..',
-  'dboodbbbbbbbbsdnn',
-  'dbooodbsbbsbbdNn.',
-  '.dbbbbbbbbbbsdnn.',
-  '..ddklLlllkdd....',
-  '....dnndddd......',
+  '.....ddbnnndddd..',
+  '...ddbbbbbbbbBBd.',
+  '..dbsbbsBbsBbbebd',
+  'nndsbbbbbbbbdoobd',
+  '.nNdbbsbbsbdooobd',
+  '.nndsbbbbbbbbbbd.',
+  '....ddklllLlkdd..',
+  '......ddddnnd....',
 ], map2: [
   '.......nNn.......',
-  '..ddddnnnbdd.....',
-  '.dBBbbbbbbbbdd.nn',
-  'dbebbBsbBsbbsbdNn',
-  'dboodbbbbbbbbsdnn',
-  'dbooodbsbbsbbdd..',
-  '.dbbbbbbbbbbsd...',
-  '..ddklLlllkdd....',
-  '....dnndddd......'
+  '.....ddbnnndddd..',
+  'nn.ddbbbbbbbbBBd.',
+  'nNdbsbbsBbsBbbebd',
+  'nndsbbbbbbbbdoobd',
+  '..ddbbsbbsbdooobd',
+  '...dsbbbbbbbbbbd.',
+  '....ddklllLlkdd..',
+  '......ddddnnd....'
 ]};
 DEFS.turtle = { colors: { b: '#5a7a3a', s: '#3c5426', l: '#b0a068', e: '#111', f: '#4a3c20' }, shade: { d: ['b', -0.62], k: ['l', -0.22] }, map: [
   '.....ddddd......',
-  '...ddBsBsBdd....',
-  '..dBsbbbbbsbd...',
-  '.dBbbsBsBsbbbdd.',
-  '.dbsbbbbbbbsbdbd',
-  '.dbbbsbsbsbbbdeb',
+  '...ddBBBBbdd....',
+  '..dBblbsblbbd...',
+  '.dBblbbsbblbbdd.',
+  '.dbbsssssssbbdbd',
+  '.dbbblbbsblbbdeb',
   '..dlLllllllddbbd',
   '...dklllllkd.dd.',
   '...dfd.dfd.d....',
   '...ff..ff.......',
 ], map2: [
   '.....ddddd......',
-  '...ddBsBsBdd....',
-  '..dBsbbbbbsbd...',
-  '.dBbbsBsBsbbbdd.',
-  '.dbsbbbbbbbsbdbd',
-  '.dbbbsbsbsbbbdeb',
+  '...ddBBBBbdd....',
+  '..dBblbsblbbd...',
+  '.dBblbbsbblbbdd.',
+  '.dbbsssssssbbdbd',
+  '.dbbblbbsblbbdeb',
   '..dlLllllllddbbd',
   '...dklllllkd.dd.',
   '..dfd...dfd.d...',
@@ -538,12 +539,71 @@ DEFS.chimera = { colors: { b: '#5a3a72', s: '#3c2450', l: '#b090d0', e: '#ffd84a
   '.....tttttt...............'
 ]};
 
+
+// Broad facial disc and ear tufts distinguish owls from the long-winged raptors.
+DEFS.owl = { colors: DEFS.bird.colors, shade: DEFS.bird.shade, map: [
+  '.....d...d......',
+  '....dbdddBd.....',
+  '....dblLlbd.....',
+  'dd..dleloed...dd',
+  'dWwddblllbddwWWd',
+  '.dWwwbBbbBwwwWd.',
+  '..dkwblLlbbwwd..',
+  '...ddblklbbdd...',
+  '.....dbsbbd.....',
+  '.....dodod......',
+  '......ddd.......',
+], map2: [
+  '.....d...d......',
+  '....dbdddBd.....',
+  '....dblLlbd.....',
+  '....dleloed.....',
+  '....dblllbdd....',
+  '...ddbBbbBbdd...',
+  '..dWwblLlbbwwd..',
+  '.dWwwblklbbwwWd.',
+  'dWwkddbsbbddwkWd',
+  '.ddd.dodod..ddd.',
+  '......ddd.......',
+]};
+// Eels swim horizontally: a ribbon fin and luminous lateral stripe, not a snake coil.
+DEFS.eel = { colors: DEFS.serpent.colors, shade: DEFS.serpent.shade, map: [
+  '................',
+  '..........lll...',
+  '.........dBBBdd.',
+  '...lll..dBBbbed.',
+  '..dBBBddBbbbbbdo',
+  '.dBbbBbbblLllld.',
+  'dBbddbbllddddd..',
+  'dbd..dddd.......',
+  '.dd.............',
+], map2: [
+  '................',
+  '..........lll...',
+  '.........dBBBdd.',
+  '........dBBbbed.',
+  '.ddlll.ddbbbbbdo',
+  'dBBbBBdBblLllld.',
+  '.ddbbBbllddddd..',
+  '...ddddd........',
+  '................',
+]};
+
 // ---------- ITEMS & PROPS ----------
-DEFS.coin = { colors: { g: '#f0c83a', h: '#fff0a0', d: '#a07818' }, map: [
-  '.gggg.', 'ghhggg', 'ghgggg', 'gggggg', 'dggggd', '.dddd.',
+DEFS.coin = { colors: { g: '#e9b64c', h: '#fff0b5', d: '#815137' }, map: [
+  '.dddd.',
+  'dgHHgd',
+  'dHgggg',
+  'dHgdgg',
+  'dggggd',
+  '.dddd.',
 ]};
 DEFS.diamond = { colors: { c: '#6ae0f0', h: '#d8fbff', d: '#2a90b0' }, map: [
-  '.ccccc.', 'chhcccd', '.ccccd.', '..ccd..', '...c...',
+  '.ddddd.',
+  'dhcHccd',
+  '.dhccd.',
+  '..dcd..',
+  '...d...',
 ]};
 DEFS.crayfish = { colors: { r: '#d84a2a', d: '#8a2a12', l: '#f08a5a', e: '#111' }, shade: { k: ['r', -0.3] }, map: [
   'Rr.....rR..',
@@ -588,40 +648,52 @@ DEFS.shard = { colors: { c: '#ffffff', h: '#ffffff', d: '#888888' }, map: [
 ]};
 DEFS.chest = { colors: { w: '#8a5a2a', d: '#5a3a18', g: '#f0c83a', l: '#b07838' }, map: [
   '.dddddddddddd.',
-  'dWWwwwwwwwwwwd',
-  'dwlwwlwwlwwlwd',
-  'dddddddddddddd',
-  'dwwwwwdGdwwwwd',
-  'dwwwwwdgdwwwwd',
-  'dwlwwlwdwlwwld',
-  'dwwwwwwwwwwwwd',
+  'dgWWwwwwwwWggd',
+  'dgwlwwlwwlwggd',
+  'dglllllllllggd',
+  'dddddddGdddddd',
+  'dgwwwwdgdwwggd',
+  'dgwlwwdddwlggd',
+  'dgwwwwwwwwwggd',
   '.dddddddddddd.',
 ]};
 DEFS.chest_open = { colors: { w: '#8a5a2a', d: '#5a3a18', g: '#f0c83a', k: '#241a0c', l: '#b07838' }, map: [
   '.dddddddddddd.',
-  'dwwwwwwwwwwwwd',
+  'dgWWwwwwwwWggd',
+  'dglllllllllggd',
   'dddddddddddddd',
-  'dkkkkkkkkkkkkd',
-  'dkkkkkkkkkkkkd',
-  'dddddddddddddd',
-  'dwlwwlwwwlwwld',
-  'dwwwwwwwwwwwwd',
+  'dgkkkkkkkkkggd',
+  'dgkkkkkkkkkggd',
+  'dgwwwwdddwwggd',
+  'dgwlwwlwwlwggd',
   '.dddddddddddd.',
 ]};
-DEFS.pot = { colors: { c: '#b07848', d: '#7a4c28', h: '#d8a878' }, shade: { k: ['c', -0.3] }, map: [
+// Open clay jar: a thick oval rim, dark interior, narrow neck and rounded belly.
+DEFS.pot = { colors: { c: '#b87853', d: '#4c3540', h: '#e4ad77', i: '#382d38' }, shade: { k: ['c', -0.3] }, map: [
   '...dddddd...',
-  '..dcChhcckd.',
-  '.dcCchhccckd',
-  'dcCcchhccckd',
-  'dccccccccckd',
-  'dccccccccckd',
-  '.dccccccckd.',
-  '..dcccckkd..',
-  '...dddddd...',
+  '..dhhhhhhd..',
+  '..dhiiiihd..',
+  '...dccccd...',
+  '...dchckd...',
+  '..dcChcckd..',
+  '.dcChcccckd.',
+  'dcChcccccckd',
+  'dcChcccccckd',
+  'dcccccccckkd',
+  '.dccccckkkd.',
+  '..dddddddd..',
 ]};
-DEFS.bomb = { colors: { k: '#2a2a34', h: '#4a4a5a', f: '#f0a03a', s: '#c8b48a' }, map: [
-  '....s...', '...s....', '..fss...', '.dkkkd..', 'dkhkkkd.', 'dkkkkkd.', 'dkkkkkd.', '.dkkkd..', '..ddd...',
-].map(r => r.replace(/d/g, 'k'))};
+DEFS.bomb = { colors: { k: '#343749', h: '#8294a0', f: '#f0a03a', s: '#635565', d: '#202332' }, map: [
+  '....sF..',
+  '...sf...',
+  '...hh...',
+  '..dddd..',
+  '.dkHkkd.',
+  'dkHkkksd',
+  'dkkkkksd',
+  '.dksssd.',
+  '..dddd..',
+]};
 DEFS.sign = { colors: { w: '#a0764a', d: '#5a3a18', p: '#6a4a24' }, map: [
   'dddddddddddd',
   'dwwwwwwwwwwd',
@@ -638,20 +710,20 @@ DEFS.sign = { colors: { w: '#a0764a', d: '#5a3a18', p: '#6a4a24' }, map: [
 // player sprite so it reads as *him* at a glance.
 DEFS.statue = { colors: { d: '#4a525e', b: '#9aa2ac', l: '#bcc4cc', o: '#9aa2ac', e: '#6a727c', w: '#d0d8e0', t: '#7a828c', f: '#8a929c', q: '#7a828c' }, shade: GUS_SHADE, map: [
   '.....ddddd......',
-  '....dBBBbbd.....',
+  '....dBBbbbd.....',
   '...dBBbbbbbd....',
-  '...dbbbbbbwed...',
-  '...dbbbbbbeedOOO',
-  '....dbbbbbdpoooo',
-  '....dbbbbbbdpppp',
-  '...dbBLLLlbbd...',
+  '...dbbbbwwed....',
+  '...dbbbbweedddd.',
+  '....dbbbdOOoood.',
+  '....dbbbbdpppd..',
+  '...dbbBBbbbbd...',
   '...dbLLlllkbbd..',
-  '..udblllllkbbd..',
-  '.uudbllllkkbbd..',
+  '..udbLllllkbbd..',
+  '.uutbllllkkbbd..',
   'uutdbbllkbbbsd..',
-  'tttdbsbbbbbssd..',
+  'utudbsbbbbbssd..',
   '.ttddssbbbbsdd..',
-  '..t..ffF.ffF....',
+  '..t..fFF.ffF....',
   '....FFFf.FFFf...',
   '..qQQQQQQQQQQq..',
   '..qqqqqqqqqqqq..',
@@ -720,6 +792,34 @@ DEFS.dolphin = { colors: { b: '#5a8ab0', l: '#cfe6f4', e: '#14202a' }, shade: { 
   '..dbsllllllkbdd.',
   '...ddskkkkkdd...',
 ]};
+
+// ---------- WEAPONS ----------
+// The same tiny, outlined weapons appear in the art sheet and in combat.
+for (let tier = 1; tier <= 6; tier++) {
+  const look = SWORD_LOOK[tier];
+  const grid = Array.from({ length: 9 }, () => Array(look.len + 1).fill('.'));
+  const box = (x, y, w, h, key) => {
+    for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) grid[yy][xx] = key;
+  };
+  const top = 4 - Math.floor(look.w / 2), knee = look.len - 4;
+  box(1, 3, 4, 3, 'd'); box(1, 4, 3, 1, 'p');
+  box(4, top - 2, 3, look.w + 4, 'd'); box(5, top - 1, 1, look.w + 2, 'g');
+  box(6, top - 1, knee - 5, look.w + 2, 'd');
+  box(6, top, knee - 5, look.w, 'b'); box(6, top, knee - 5, 1, 'h');
+  box(knee + 1, top, 2, look.w, 'd'); box(knee + 1, 4, 2, 1, 'h');
+  box(look.len - 1, 4, 1, 1, 'h'); box(look.len, 4, 1, 1, 'd');
+  if (tier >= 4) box(8, top + 1, 2, 1, 'g');
+  DEFS['sword' + tier] = { colors: { d: look.dark, p: look.grip, g: look.guard, b: look.core, h: look.edge }, map: grid.map(row => row.join('')) };
+  DEFS['bow' + tier] = { colors: { d: '#302b3e', b: tier < 3 ? '#a87952' : look.core, h: look.edge, g: look.guard, s: '#e4d4b1' }, map: [
+    '....dd..', '...dhds.', '..dhbds.', '.dhbd.s.', '.dbd..s.', 'dhbd..s.',
+    'dgbd..s.', 'dhbd..s.', '.dbd..s.', '.dhbd.s.', '..dhbds.', '...dhds.', '....dd..',
+  ]};
+}
+for (const [name, arrow] of Object.entries(ARROWS)) {
+  DEFS['arrow_' + name] = { colors: { d: '#303344', b: '#b99568', h: '#f7e9c5', c: arrow.color }, map: [
+    'hh.......d...', '.hdddddddcdd.', '..bbbbbbcccch', '.hdddddddcdd.', 'hh.......d...',
+  ]};
+}
 
 // ---------- SHIELDS ----------
 // One per level. They grow and change material as they upgrade, and the silhouette
@@ -887,8 +987,8 @@ const VARIANTS = {
   kooka:       { base: 'bird', colors: { b: '#8a7a5a', w: '#5a86b0', l: '#e8e0c8' } },
   kooka_e:     { base: 'bird', colors: { b: '#5a4a6a', w: '#9a4ab0', l: '#d8c8e8' } },
   // water
-  volteel:     { base: 'serpent', colors: { b: '#3a5a8a', s: '#243c5f', l: '#8ab8e0', e: '#ffe95c', o: '#ffe95c' } },
-  volteel_e:   { base: 'serpent', colors: { b: '#8a8a2a', s: '#5f5f18', l: '#e0e08a', e: '#fff', o: '#fff' } },
+  volteel:     { base: 'eel', colors: { b: '#3a5a8a', s: '#243c5f', l: '#8ab8e0', e: '#ffe95c', o: '#ffe95c' } },
+  volteel_e:   { base: 'eel', colors: { b: '#8a8a2a', s: '#5f5f18', l: '#e0e08a', e: '#fff', o: '#fff' } },
   cod:         { base: 'fish' },
   cod_e:       { base: 'fish', colors: { b: '#7a3a6a', s: '#521f48', l: '#d89ac8' } },
   snapshell:   { base: 'turtle' },
@@ -896,8 +996,8 @@ const VARIANTS = {
   // air
   talon:       { base: 'bird', colors: { b: '#6a5238', w: '#8a6a48', l: '#e0d0b0' } },
   talon_e:     { base: 'bird', colors: { b: '#3a4a6a', w: '#5a6a9a', l: '#c8d0e8' } },
-  owl:         { base: 'bird', colors: { b: '#5a4a5a', w: '#7a6a7a', l: '#d0c8d0', e: '#ffd84a' } },
-  owl_e:       { base: 'bird', colors: { b: '#2a2a3a', w: '#4a4a6a', l: '#a0a0c0', e: '#ff4a4a' } },
+  owl:         { base: 'owl', colors: { b: '#5a4a5a', w: '#7a6a7a', l: '#d0c8d0', e: '#ffd84a' } },
+  owl_e:       { base: 'owl', colors: { b: '#2a2a3a', w: '#4a4a6a', l: '#a0a0c0', e: '#ff4a4a' } },
   // earth
   dingo:       { base: 'canine' },
   dingo_e:     { base: 'canine', colors: { b: '#6a6a72', l: '#c8c8d0', t: '#52525a' } },
@@ -916,8 +1016,8 @@ const VARIANTS = {
   boss_kinggoanna: { base: 'knight', scale: 2, colors: { b: '#5a5230', l: '#c8bc86', m: '#a8781a', h: '#7a5a12', g: '#ffd84a' } },
   boss_apexus:     { base: 'chimera', scale: 2 },
   mini_fox:    { base: 'canine', scale: 2, colors: { b: '#d9622b', l: '#f0e0c8', t: '#f0a03a' } },
-  mini_eel:    { base: 'serpent', scale: 2, colors: { b: '#3a5a8a', s: '#243c5f', l: '#8ab8e0', e: '#ffe95c', o: '#ffe95c' } },
-  mini_owl:    { base: 'bird', scale: 2, colors: { b: '#5a4a5a', w: '#7a6a7a', l: '#d0c8d0', e: '#ffd84a' } },
+  mini_eel:    { base: 'eel', scale: 2, colors: { b: '#3a5a8a', s: '#243c5f', l: '#8ab8e0', e: '#ffe95c', o: '#ffe95c' } },
+  mini_owl:    { base: 'owl', scale: 2, colors: { b: '#5a4a5a', w: '#7a6a7a', l: '#d0c8d0', e: '#ffd84a' } },
   mini_python: { base: 'serpent', scale: 2, colors: { b: '#6a5a2a', s: '#483c18', l: '#c8b47a' } },
 };
 
