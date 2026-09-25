@@ -474,6 +474,208 @@ export function buildOverworld() {
     propList.push({ kind: 'chest', tx: cx, ty: cy, id: 'owc' + i, contents });
   });
 
+  // --- puggles: fifty baby platypuses hidden across the Vale. Some sit in plain sight in
+  // out-of-the-way corners, some hide under tall grass, reeds, cracked rock or crystal,
+  // some paddle out in deep water, and some only come out once a small puzzle is solved
+  // (see DESIGN.md). Built last, from fixed shapes with no rng draws, so nothing generated
+  // above shifts. The number in each id is a save key: never renumber, only add.
+  const GROUND = [T.GRASS, T.ASH, T.SAND, T.PATH, T.DARKGRASS, T.STORMGRASS, T.GRASS];
+  const groundAt = (x, y) => GROUND[reg(x, y)];
+  const CLEARABLE = new Set([T.TREE, T.PINE, T.PALM, T.ROCK, T.BASALT, T.MESA, T.CRACKROCK, T.CRYSTAL,
+    T.STORMROCK, T.DEADTREE, T.TALLGRASS, T.MUD, T.THORNS]);
+  const RING8 = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
+  const disc = (cx, cy, rad, fn) => {
+    const R = Math.ceil(rad);
+    for (let y = cy - R; y <= cy + R; y++) for (let x = cx - R; x <= cx + R; x++)
+      if (inB(x, y) && dist(x, y, cx, cy) <= rad) fn(x, y);
+  };
+  const clearAround = (cx, cy, rad) =>
+    disc(cx, cy, rad, (x, y) => { if (CLEARABLE.has(get(x, y))) set(x, y, groundAt(x, y)); });
+  const openGround = (x, y) => { const t = get(x, y), p = props(t); return !p.solid && !p.water && !p.deep && !p.lava && t !== T.PATH && t !== T.BRIDGE; };
+  const puggle = (n, tx, ty, extra = {}) => propList.push({ kind: 'puggle', id: 'puggle_' + n, tx, ty, ...extra });
+  const nearest = (nx, ny, ok) => {
+    let best = null, bestD = Infinity;
+    for (let y = ny - 12; y <= ny + 12; y++) for (let x = nx - 12; x <= nx + 12; x++) {
+      if (!inB(x, y) || !ok(get(x, y))) continue;
+      const d = dist(x, y, nx, ny);
+      if (d < bestD) { bestD = d; best = [x, y]; }
+    }
+    return best;
+  };
+
+  // plain sight, if you go looking: a pocket of `wall` open on one side
+  const nook = (n, cx, cy, [ox, oy], wall, floor = null) => {
+    clearAround(cx, cy, 2.5);
+    for (const [dx, dy] of RING8) if (!((ox && dx === ox) || (oy && dy === oy))) set(cx + dx, cy + dy, wall);
+    if (floor !== null) set(cx, cy, floor);
+    puggle(n, cx, cy);
+  };
+  const glade = (n, cx, cy) => { clearAround(cx, cy, 1.5); puggle(n, cx, cy); };
+  // under a lone tuft of tall grass -- the odd one out wherever grass doesn't grow
+  const tuft = (n, x, y) => { set(x, y, T.TALLGRASS); puggle(n, x, y); };
+  // under one tuft of a whole patch
+  const patch = (n, cx, cy, [px, py]) => {
+    clearAround(cx, cy, 2.2);
+    disc(cx, cy, 2.2, (x, y) => { if (openGround(x, y)) set(x, y, T.TALLGRASS); });
+    tuft(n, cx + px, cy + py);
+  };
+  // a ring of flowers around a single tuft
+  const flowerRing = (n, cx, cy) => {
+    clearAround(cx, cy, 2.6);
+    disc(cx, cy, 2.3, (x, y) => { if (dist(x, y, cx, cy) >= 1.5 && openGround(x, y)) set(x, y, T.FLOWER); });
+    disc(cx, cy, 1.2, (x, y) => set(x, y, T.GRASS));
+    tuft(n, cx, cy);
+  };
+  // among the reeds at a pond's edge
+  const reeds = (n, nx, ny) => {
+    const at = nearest(nx, ny, t => t === T.SHALLOW || t === T.REED);
+    if (!at) return;
+    set(at[0], at[1], T.REED);
+    puggle(n, at[0], at[1]);
+  };
+  // curled up under a cracked boulder or a crystal -- a bomb arrow's job
+  const boulder = (n, x, y, rock = T.CRACKROCK) => { clearAround(x, y, 1.5); set(x, y, rock); puggle(n, x, y); };
+  // in plain view but sealed in by cracked rock
+  const walled = (n, cx, cy) => {
+    clearAround(cx, cy, 2.6);
+    for (const [dx, dy] of RING8) set(cx + dx, cy + dy, T.CRACKROCK);
+    puggle(n, cx, cy);
+  };
+  // paddling in deep water, snapped to a genuine deep tile (water edges are noisy)
+  const swimmer = (n, nx, ny) => { const at = nearest(nx, ny, t => t === T.DEEP); if (at) puggle(n, at[0], at[1]); };
+  // a speck of island out in deep water, one palm for shade
+  const islet = (n, cx, cy) => {
+    disc(cx, cy, 1.2, (x, y) => set(x, y, T.SAND));
+    set(cx + 1, cy - 1, T.PALM);
+    puggle(n, cx, cy);
+  };
+
+  // --- puzzle puggles: each is a `puzzles` entry with a `puggle` field instead of doors,
+  // and the puggle stays hidden until its puzzle is solved ---
+  const puzzlePuggle = (n, pop, cfg) => {
+    const id = 'puggle_' + n;
+    puzzles.push({ id, doors: [], ground: T.GRASS, puggle: id, ...cfg });
+    puggle(n, pop[0], pop[1], { puzzle: id });
+  };
+  // push the stone(s) into the hollow(s)
+  const stones = (n, pairs, pop, [cx, cy, rad]) => {
+    clearAround(cx, cy, rad);
+    const plates = [], blocks = [];
+    for (const [[px, py], [bx, by]] of pairs) {
+      set(px, py, T.PLATE); plates.push([px, py]);
+      propList.push({ kind: 'block', tx: bx, ty: by }); blocks.push([bx, by]);
+    }
+    puzzlePuggle(n, pop, { kind: 'blocks', plates, blocks });
+  };
+  // strike the eye(s) with an arrow or a sword beam; more than one must all be lit in time
+  const eyes = (n, list, pop, limit, [cx, cy, rad]) => {
+    clearAround(cx, cy, rad);
+    list.forEach(([x, y]) => set(x, y, T.EYE));
+    puzzlePuggle(n, pop, list.length > 1
+      ? { kind: 'timed', eyes: list, limit, resetToast: 'The eyes close. Try again, quicker!' }
+      : { kind: 'sequence', eyes: list, order: [0], step: 0 });
+  };
+  // a pack of predators standing guard; clear them and the puggle comes out
+  const nest = (n, [tx, ty], types) => {
+    clearAround(tx, ty, 4);
+    const spawns = [[-3, -2], [3, -2], [0, 3], [-3, 2], [3, 2]].slice(0, types.length).map(([dx, dy]) => [tx + dx, ty + dy]);
+    puzzlePuggle(n, [tx, ty], { kind: 'killall', trigger: [tx, ty], spawns, types, armed: false,
+      armToast: 'Predators are guarding a puggle!' });
+  };
+  // a dash: step on the plate, then reach the glowing ring before time runs out
+  const race = (n, start, goal, limit, sign) => {
+    const [sx, sy] = start, [gx, gy] = goal;
+    const len = Math.max(Math.abs(gx - sx), Math.abs(gy - sy));
+    for (let i = 0; i <= len; i++) clearAround(sx + Math.sign(gx - sx) * i, sy + Math.sign(gy - sy) * i, 1.5);
+    set(sx, sy, T.PLATE);
+    propList.push({ kind: 'sign', tx: sign[0], ty: sign[1],
+      text: 'PUGGLE DASH!|Step on the plate, then race to the glowing ring before the time runs out. Sprint!' });
+    puzzlePuggle(n, goal, { kind: 'race', start, goal, limit });
+  };
+
+  // Mama Pearl's meadow, just outside the village's south gate on the burrow road: every
+  // puggle found comes home to play here, so it's cleared and roomy enough for all fifty.
+  const MEADOW = [95, 122];
+  clearAround(...MEADOW, 4.5);
+  disc(...MEADOW, 4.5, (x, y) => { if (openGround(x, y)) set(x, y, (x * 7 + y * 3) % 5 === 0 ? T.FLOWER : T.GRASS); });
+  propList.push({ kind: 'npc', tx: MEADOW[0], ty: MEADOW[1] - 1, sprite: 'mama', name: 'Mama Pearl', dialog: 'mama' });
+  propList.push({ kind: 'sign', tx: 99, ty: 124, text: "PUGGLE MEADOW.|Mama Pearl's little ones play here. Mind your step!" });
+
+  // Village and the burrow: three easy ones to learn the ropes
+  puggle(0, 97, 153);                                // right beside Gus's burrow
+  tuft(1, 93, 103);                                  // behind the northwest cottage
+  puggle(2, 125, 111);                               // squeezed behind the Crucible, by the river
+
+  // Willow Marsh
+  patch(3, 78, 134, [1, 1]);
+  flowerRing(4, 116, 138);
+  reeds(5, 74, 90);
+  swimmer(6, 118, 91);
+  swimmer(7, 131, 78);
+  nook(8, 162, 100, [1, 0], T.TREE);
+  boulder(9, 112, 75);
+  stones(10, [[[82, 72], [82, 74]]], [84, 72], [82, 73, 3]);
+  race(11, [103, 96], [103, 66], 4.5, [104, 96]);
+  nest(12, [82, 146], ['rakali', 'adder', 'rakali']);
+  nook(13, 40, 112, [-1, 0], T.TREE);
+  patch(14, 142, 122, [-1, 0]);
+
+  // Cinderscale Wastes
+  tuft(15, 144, 52);
+  boulder(16, 192, 52);
+  walled(17, 140, 9);
+  eyes(18, [[182, 74], [186, 74], [190, 74]], [186, 77], 4, [186, 76, 5]);
+  nest(19, [168, 70], ['snapjaw', 'emberfox', 'mgoanna']);
+  {
+    // an island in the middle of a lava lake, reached by a one-plank bridge
+    const [lx, ly] = [160, 18];
+    disc(lx, ly, 1.2, (x, y) => set(x, y, T.ASH));
+    for (let y = ly + 2; get(lx, y) === T.LAVA; y++) set(lx, y, T.BRIDGE);
+    puggle(20, lx, ly);
+  }
+  nook(21, 196, 40, [-1, 0], T.BASALT);
+  swimmer(22, 130, 40);
+
+  // Mistfall Lagoon
+  swimmer(23, 180, 168);
+  swimmer(24, 160, 187);
+  swimmer(25, 132, 150);
+  islet(26, 152, 166);
+  tuft(27, 190, 128);
+  boulder(28, 192, 192);
+  stones(29, [[[122, 182], [124, 182]]], [122, 180], [123, 182, 3]);
+  race(30, [142, 145], [170, 145], 4.2, [142, 144]);
+
+  // Skyreach Bluffs
+  {
+    // an eye set in the face of a lone mesa, visible only from the south
+    for (let y = 11; y <= 13; y++) for (let x = 48; x <= 52; x++) set(x, y, T.MESA);
+    eyes(31, [[50, 13]], [50, 16], 0, [50, 16, 2.5]);
+  }
+  eyes(32, [[56, 46], [60, 42], [64, 46]], [60, 48], 4, [60, 45, 5]);
+  boulder(33, 40, 50);
+  walled(34, 66, 8);
+  nook(35, 6, 52, [1, 0], T.MESA);
+  tuft(36, 30, 64);
+  nest(37, [14, 44], ['talon', 'owl', 'talon']);
+  nook(38, 20, 78, [0, 1], T.MESA);
+
+  // Rootdeep Forest
+  patch(39, 62, 160, [-1, 1]);
+  patch(40, 14, 124, [1, -1]);
+  nook(41, 56, 186, [0, -1], T.PINE, T.TALLGRASS);
+  boulder(42, 78, 192, T.CRYSTAL);
+  stones(43, [[[20, 146], [20, 148]], [[24, 146], [24, 148]]], [22, 145], [22, 147, 4]);
+  nest(44, [78, 176], ['dingo', 'dingo', 'wildcat']);
+  glade(45, 5, 194);
+  glade(46, 13, 172);
+
+  // The Confluence, past the Great Gate
+  set(84, 20, T.STORMGRASS);                         // a clear heart inside the thorns
+  puggle(47, 84, 20);
+  eyes(48, [[106, 36], [114, 36]], [110, 39], 3.5, [110, 38, 5]);
+  boulder(49, 80, 42);
+
   // --- enemy spawners ---
   const rSp = rng(WORLD_SEED + 3);
   const spawners = [];
@@ -495,6 +697,7 @@ export function buildOverworld() {
     dist(x, y, ...BARNABY_SPOT) < 10 ||
     dist(x, y, ...FENWICK_SPOT) < 14 ||
     dist(x, y, ...YUMA_ITEM_SPOT) < 10 ||
+    dist(x, y, ...MEADOW) < 8 ||
     spawners.some(s => dist(x, y, s.tx, s.ty) < 4);
   for (const [rgKey, count] of Object.entries(COUNTS)) {
     const rgId = Number(rgKey);

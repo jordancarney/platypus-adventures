@@ -20,6 +20,9 @@ Landscape is recommended, and it works nicely added to a home screen.
 - A wave arena, heart vessels, a world map, multiple save files, and a chiptune soundtrack
 - Optional side quests -- fetch errands and a friend to rescue -- marked with a "!" and
   tracked on the map, for players chasing 100%
+- Fifty baby platypuses (puggles) to find -- in tall grass, under rocks, out in deep water,
+  or behind little puzzles -- each one heading home to Mama Pearl's meadow. Find them all
+  for the God Sword, which fires a beam of light at full health
 
 ## Built with
 

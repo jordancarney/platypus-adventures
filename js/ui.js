@@ -1,6 +1,7 @@
 // HUD, title screen, dialogs, shop, shrine, map, pause, banners, death, credits.
 import { VIEW_W, VIEW_H, ARROW_TYPES, ARROWS, UPGRADE_TRACKS, CONSUMABLES, MAX_LEVEL,
-  ARROW_UP_BASE, ARROW_UP_STEP, ARROW_UP_DESC, VESSEL_COSTS, REGION_NAMES, TELEPORT, SPRINT, SIDE_QUESTS } from './config.js';
+  ARROW_UP_BASE, ARROW_UP_STEP, ARROW_UP_DESC, VESSEL_COSTS, REGION_NAMES, TELEPORT, SPRINT, SIDE_QUESTS,
+  GOD_SWORD_LV, PUGGLE_TOTAL } from './config.js';
 import { clamp } from './util.js';
 import { drawSprite } from './pixelart.js';
 import { drawText, textWidth } from './font.js';
@@ -118,6 +119,11 @@ export function drawHUD(g, ctx) {
     ctx.fillRect(VIEW_W / 2 - w / 2, VIEW_H - 14, w * clamp(b.hp / b.maxHp, 0, 1), 5);
   }
   if (g.arena) drawArenaHUD(g, ctx);
+  if (g.activeRace) {
+    const t = Math.max(0, g.activeRace.timer);
+    text(ctx, 'PUGGLE DASH', VIEW_W / 2, 30, { size: 8, align: 'center', color: '#ffd84a' });
+    text(ctx, t.toFixed(1), VIEW_W / 2, 42, { size: 12, align: 'center', color: t < 1.5 ? '#ff9aa8' : '#f0ead8' });
+  }
   drawToasts(g, ctx);
   drawRegionToast(g, ctx);
   if (g.state.god) text(ctx, 'GOD', VIEW_W - 30, VIEW_H - 12, { color: '#f0c83a', size: 7 });
@@ -278,8 +284,9 @@ function drawFileCard(g, ctx, r, st, selected) {
   // ---- row 2: gear levels
   let gx = r.x + 48;
   for (const [name, lv] of [['Sword', st.sword], ['Shield', st.shield], ['Bow', st.bow], ['Armor', st.armor]]) {
-    const on = (lv || 0) > 0;
-    text(ctx, name + ' ' + (on ? 'L' + lv : '-'), gx, r.y + 21, { size: 7, color: on ? '#d8e0c8' : '#5a626c' });
+    const on = (lv || 0) > 0, god = name === 'Sword' && lv >= GOD_SWORD_LV;
+    text(ctx, name + ' ' + (god ? 'GOD' : on ? 'L' + lv : '-'), gx, r.y + 21,
+      { size: 7, color: god ? '#ffd84a' : on ? '#d8e0c8' : '#5a626c' });
     gx += textWidth(name + ' L0', 1) + 12;
   }
 
@@ -299,6 +306,13 @@ function drawFileCard(g, ctx, r, st, selected) {
     } else ax += 10;
   }
   if (st.bow > 0) text(ctx, 'x' + (st.arrows ? st.arrows.ammo || 0 : 0), ax + 4, r.y + 35, { size: 7, color: '#c8b48a' });
+
+  // puggles found
+  const pugs = Object.keys(st.puggles || {}).length;
+  if (pugs) {
+    drawSprite(ctx, 'puggle', r.x + 216, r.y + 44);
+    text(ctx, `${pugs}/${PUGGLE_TOTAL}`, r.x + 224, r.y + 35, { size: 7, color: pugs >= PUGGLE_TOTAL ? '#ffd84a' : '#f2d29c' });
+  }
 
   // dungeons cleared
   const done = st.dungeonsDone || {};
@@ -553,6 +567,13 @@ export function drawMap(g, ctx) {
       ctx.strokeStyle = '#101418';
       ctx.strokeRect(px - 2.5, py - 2.5, 6, 6);
     }
+    // puggles already found get a small dot, so the blank stretches show where to look next
+    ctx.fillStyle = '#f2d29c';
+    for (const p of g.area.props || []) {
+      if (p.kind !== 'puggle' || !g.state.puggles[p.id]) continue;
+      const [px, py] = pt(p.tx, p.ty);
+      ctx.fillRect(Math.round(px) - 1, Math.round(py) - 1, 2, 2);
+    }
     if (Math.floor(g.time * 3) % 2 === 0) {
       const [px, py] = pt(g.player.cx / 16, g.player.cy / 16);
       ctx.fillStyle = '#fff';
@@ -576,6 +597,9 @@ export function drawMap(g, ctx) {
       text(ctx, (s === 'done' ? '[x] ' : '[ ] ') + sq.name + suffix, lx, 138 + i * 12,
         { size: 7, color: s === 'done' ? '#8a8278' : s === 'ready' ? '#ffd23a' : '#f0ead8' });
     });
+    const pugs = g.puggleCount(), allPugs = pugs >= PUGGLE_TOTAL;
+    drawSprite(ctx, 'puggle', lx + 5, 208);
+    text(ctx, `PUGGLES  ${pugs} / ${PUGGLE_TOTAL}`, lx + 13, 200, { size: 8, color: allPugs ? '#ffd84a' : '#f2d29c' });
   } else if (g.area.isArena) {
     text(ctx, 'THE CRUCIBLE', VIEW_W / 2, 20, { size: 12, align: 'center', color: '#f0c83a' });
     const A = g.arena || { wave: 0 };

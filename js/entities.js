@@ -1,9 +1,9 @@
 // Player, projectiles, pickups, chests, props, push blocks.
-import { TILE, PLAYER, SWORD_LOOK, SHIELD_LOOK, ARMOR_REDUCE, SHIELD_ARC, SHIELD_SLOW, BOW_COOLDOWN, BOW_POWER,
-  ARROWS, BURN, FREEZE_TIME, CHAIN_TARGETS, BOMB_RADIUS, CRAYFISH_HEAL, DROPS, SPRINT, tierCoins } from './config.js';
+import { TILE, PLAYER, SWORD_LOOK, SWORD_DMG, SHIELD_LOOK, ARMOR_REDUCE, SHIELD_ARC, SHIELD_SLOW, BOW_COOLDOWN, BOW_POWER,
+  ARROWS, BURN, FREEZE_TIME, CHAIN_TARGETS, BOMB_RADIUS, CRAYFISH_HEAL, DROPS, SPRINT, GOD_SWORD_LV, GOD_BEAM, tierCoins } from './config.js';
 import { clamp, aabb, dist, dirTo, DIRS } from './util.js';
 import { T, props as tileProps } from './tiles.js';
-import { drawSprite, sprites } from './pixelart.js';
+import { drawSprite, sprites, PUGGLE_ACCESSORIES } from './pixelart.js';
 import { input } from './input.js';
 import { audio } from './audio.js';
 import { touch, buzz } from './touch.js';
@@ -191,6 +191,8 @@ export class Player extends Entity {
         this.slashId++;
         audio.sfx('slash');
         this.emitSlashSparks(g);
+        // the God Sword throws a beam of light on every swing while Gus is at full health
+        if (st.sword >= GOD_SWORD_LV && st.hp >= st.maxHp) this.fireBeam(g);
       }
       if (input.pressed('bow') && st.bow > 0 && this.bowCd <= 0) this.shoot(g);
     }
@@ -202,6 +204,20 @@ export class Player extends Entity {
 
     // feet go faster on a sprint, so the bounce reads as running
     this.animT += dt * (this.moving ? (this.sprinting ? 1.7 : 1) : 0.4);
+
+    // a faint glitter at his side while the God Sword's beam is ready to fly
+    if (st.sword >= GOD_SWORD_LV && st.hp >= st.maxHp && !this.swimming && Math.random() < dt * 5) {
+      g.addParticle(this.cx + (this.flip ? -6 : 6) + (Math.random() - 0.5) * 4, this.cy - 2,
+        Math.random() < 0.5 ? '#fff6c8' : '#ffd84a', 0.45, 0, -14, 1);
+    }
+  }
+
+  // Zelda rules: one beam on screen at a time, fired along the swing's facing.
+  fireBeam(g) {
+    if (g.ents.some(e => e instanceof SwordBeam && !e.dead)) return;
+    const [dx, dy] = DIRS[this.facing];
+    g.spawn(new SwordBeam(this.cx + dx * 10, this.cy - 3 + dy * 10, dx, dy, SWORD_DMG[g.state.sword]));
+    audio.sfx('beam');
   }
 
   // Sprint is a hold on the keyboard. On touch a tap *latches* it, because the right thumb
@@ -234,7 +250,7 @@ export class Player extends Entity {
 
   // Sparks are thrown along the swing arc; higher tiers throw more of them.
   emitSlashSparks(g) {
-    const look = SWORD_LOOK[clamp(g.state.sword, 1, 5)];
+    const look = SWORD_LOOK[clamp(g.state.sword, 1, SWORD_LOOK.length - 1)];
     if (!look.spark || !look.sparkN) return;
     const base = SLASH_BASE[this.facing], sweep = SLASH_SWEEP[this.facing];
     for (let i = 0; i < look.sparkN; i++) {
@@ -326,7 +342,7 @@ export class Player extends Entity {
       ctx.restore();
     }
     // the sword is only drawn while swinging
-    if (this.attackT > 0) this.drawSlash(ctx, SWORD_LOOK[clamp(st.sword, 1, 6)], cx);
+    if (this.attackT > 0) this.drawSlash(ctx, SWORD_LOOK[clamp(st.sword, 1, SWORD_LOOK.length - 1)], cx);
   }
 
   drawShield(ctx, look, cx, by, g) {
@@ -466,6 +482,59 @@ export class Arrow extends Entity {
     ctx.rotate(Math.atan2(this.dy, this.dx));
     const arrow = sprites['arrow_' + this.type];
     ctx.drawImage(arrow.canvas, -6, -2);
+    ctx.restore();
+  }
+}
+
+// ---------------------------------------------------------------- SWORD BEAM (God Sword)
+// The blade itself flies out, trailing its rainbow, and bursts into four diagonal sparks
+// when it lands -- the classic full-health sword beam.
+export class SwordBeam extends Entity {
+  constructor(x, y, dx, dy, dmg) {
+    super(x - 5, y - 5, 10, 10);
+    this.team = 'player';
+    this.dx = dx; this.dy = dy;
+    this.dmg = dmg;
+    this.left = GOD_BEAM.range;
+    this.age = 0;
+    this.fly = true;
+  }
+  update(g, dt) {
+    this.age += dt;
+    const step = GOD_BEAM.speed * dt;
+    this.x += this.dx * step; this.y += this.dy * step;
+    this.left -= step;
+    const tx = Math.floor(this.cx / TILE), ty = Math.floor(this.cy / TILE);
+    const id = g.area.get(tx, ty);
+    if (id === T.EYE) { g.triggerEye(tx, ty); this.die(g); return; }
+    if (tileProps(id).solid || this.left <= 0) { this.die(g); return; }
+    const trail = SWORD_LOOK[GOD_SWORD_LV].trail;
+    g.addParticle(this.cx - this.dx * 8 + (Math.random() - 0.5) * 6, this.cy - this.dy * 8 + (Math.random() - 0.5) * 6,
+      trail[Math.floor(Math.random() * trail.length)], 0.3, -this.dx * 30, -this.dy * 30, Math.random() < 0.4 ? 2 : 1);
+  }
+  onHitEnemy(g, e) {
+    e.hurt(g, this.dmg, this.cx, this.cy);
+    this.die(g);
+  }
+  die(g) {
+    if (this.dead) return;
+    this.dead = true;
+    for (const [sx, sy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      for (let i = 0; i < 3; i++) {
+        g.addParticle(this.cx, this.cy, i ? '#fff6c8' : '#ffffff', 0.4, sx * (60 + i * 30), sy * (60 + i * 30), 2);
+      }
+    }
+  }
+  draw(g, ctx) {
+    const s = sprites['sword' + GOD_SWORD_LV];
+    ctx.save();
+    ctx.translate(Math.round(this.cx), Math.round(this.cy));
+    ctx.rotate(Math.atan2(this.dy, this.dx));
+    ctx.globalAlpha = 0.35 + 0.2 * Math.sin(this.age * 40);
+    ctx.fillStyle = '#fff6c8';
+    ctx.beginPath(); ctx.ellipse(0, 0, 15, 6, 0, 0, 7); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.drawImage(s.canvas, -Math.round(s.w / 2), -4);
     ctx.restore();
   }
 }
@@ -800,6 +869,128 @@ export class Dolphin extends Entity {
   }
 }
 
+// ---------------------------------------------------------------- PUGGLE (collectible)
+// A baby platypus hiding somewhere in the Vale. Walk into one to send it home to Mama.
+// Hidden while its own tile still covers it (tall grass, reeds, cracked rock, crystal) or
+// while the puzzle it belongs to is unsolved; it hops out the moment that changes.
+const PUGGLE_COVER = new Set([T.TALLGRASS, T.REED, T.CRACKROCK, T.CRYSTAL]);
+
+// Every puggle has its own look, fixed by its id: one of three coats, and either nothing or
+// one accessory (a bow, a leaf hat, a stick sword...). Steps of 3 through 8 looks and of 1
+// through 3 coats never line up, so neighbours in the id list never match.
+const PUGGLE_COATS = ['puggle', 'puggle_cream', 'puggle_choc'];
+const PUGGLE_LOOKS = [null, ...PUGGLE_ACCESSORIES];
+export function puggleLook(id) {
+  const n = parseInt(String(id).split('_')[1], 10) || 0;
+  return { coat: PUGGLE_COATS[n % 3], acc: PUGGLE_LOOKS[(n * 3) % PUGGLE_LOOKS.length] };
+}
+export function drawPuggle(ctx, look, cx, by, { flip = false, waddle = false } = {}) {
+  drawSprite(ctx, waddle ? look.coat + '_2' : look.coat, cx, by, { flip });
+  if (look.acc) drawSprite(ctx, look.acc, cx, by, { flip });
+}
+export class Puggle extends Entity {
+  constructor(def) {
+    super(def.tx * TILE + 3, def.ty * TILE + 4, 10, 8);
+    this.def = def;
+    this.pid = def.id;
+    this.look = puggleLook(def.id);
+    this.hidden = null;     // settled on the first update, so a load never plays the pop
+    this.z = 0; this.vz = 0;
+    this.hopT = 1 + Math.random() * 2;
+    this.hintT = Math.random() * 2;
+    this.flip = false;
+  }
+  isHidden(g) {
+    if (this.def.puzzle && !g.state.flags['puzzle_' + this.def.puzzle]) return true;
+    return PUGGLE_COVER.has(g.area.get(Math.floor(this.cx / TILE), Math.floor(this.cy / TILE)));
+  }
+  update(g, dt) {
+    const p = g.player;
+    const d = dist(this.cx, this.cy, p.cx, p.cy);
+    const hid = this.isHidden(g);
+    if (this.hidden === null) this.hidden = hid;
+    if (this.hidden && !hid) {                     // just uncovered: pop up and squeak
+      this.vz = 95;
+      audio.sfx('peep');
+      g.burst(this.cx, this.cy - 4, '#fff6c8', 8);
+    }
+    this.hidden = hid;
+    if (hid) {
+      // a little glitter and the odd peep give away a covered puggle up close
+      if (this.def.puzzle) return;
+      this.hintT -= dt;
+      if (d < 64 && this.hintT <= 0) {
+        this.hintT = 1.1 + Math.random() * 1.4;
+        for (let i = 0; i < 3; i++) {
+          g.addParticle(this.cx + (Math.random() - 0.5) * 12, this.cy - 2 - Math.random() * 8, '#fff6c8', 0.6, 0, -10, 1);
+        }
+        if (d < 40 && Math.random() < 0.5) audio.sfx('peep');
+      }
+      return;
+    }
+    // idle: the odd hop, always turned to watch Gus
+    if (this.z > 0 || this.vz > 0) {
+      this.z += this.vz * dt; this.vz -= 300 * dt;
+      if (this.z <= 0) { this.z = 0; this.vz = 0; }
+    } else if ((this.hopT -= dt) <= 0) {
+      this.hopT = 1.2 + Math.random() * 2.2;
+      this.vz = 55;
+    }
+    this.flip = p.cx < this.cx;
+    if (d < 13) g.collectPuggle(this);
+  }
+  draw(g, ctx) {
+    if (this.hidden !== false) return;
+    const tile = g.area.get(Math.floor(this.cx / TILE), Math.floor(this.cy / TILE));
+    const by = this.bottom + 1 - this.z;
+    if (tileProps(tile).deep) {
+      // paddling: only head and shoulders above the surface, with a ripple ring
+      const bob = Math.sin(g.time * 3 + this.id) * 1;
+      ctx.save();
+      ctx.beginPath(); ctx.rect(this.cx - 9, by - 16 + bob, 18, 12); ctx.clip();
+      drawPuggle(ctx, this.look, this.cx, by + 2 + bob, { flip: this.flip });
+      ctx.restore();
+      ctx.save();
+      ctx.globalAlpha = 0.45;
+      ctx.strokeStyle = '#bfe8f2';
+      ctx.beginPath(); ctx.ellipse(this.cx, by - 5 + bob, 6 + Math.sin(g.time * 4) * 1, 2, 0, 0, 7); ctx.stroke();
+      ctx.restore();
+      return;
+    }
+    ctx.fillStyle = '#25324144';
+    ctx.fillRect(Math.round(this.cx) - 3, Math.round(this.bottom), 6, 1);
+    drawPuggle(ctx, this.look, this.cx, by, { flip: this.flip, waddle: this.z > 0 });
+  }
+}
+
+// A puggle that's been found, playing in Mama Pearl's meadow. Purely for show: it hops
+// about its spot and turns to watch Gus go by. One per puggle found, each in its own look.
+export class HomePuggle extends Entity {
+  constructor(id, x, y) {
+    super(x - 5, y - 4, 10, 8);
+    this.look = puggleLook(id);
+    this.z = 0; this.vz = 0;
+    this.hopT = Math.random() * 2.5;
+    this.flip = Math.random() < 0.5;
+  }
+  update(g, dt) {
+    if (this.z > 0 || this.vz > 0) {
+      this.z += this.vz * dt; this.vz -= 300 * dt;
+      if (this.z <= 0) { this.z = 0; this.vz = 0; }
+    } else if ((this.hopT -= dt) <= 0) {
+      this.hopT = 0.8 + Math.random() * 2.6;
+      this.vz = 40 + Math.random() * 30;
+    }
+    const p = g.player;
+    if (dist(this.cx, this.cy, p.cx, p.cy) < 90) this.flip = p.cx < this.cx;
+  }
+  draw(g, ctx) {
+    ctx.fillStyle = '#25324144';
+    ctx.fillRect(Math.round(this.cx) - 3, Math.round(this.bottom), 6, 1);
+    drawPuggle(ctx, this.look, this.cx, this.bottom + 1 - this.z, { flip: this.flip, waddle: this.z > 0 });
+  }
+}
+
 // ---------------------------------------------------------------- PROPS (sign/npc/statue/shrine/gate/dungeon entrance)
 const PROP_SPRITES = { sign: 'sign', statue: 'statue', shrine: 'shrine', gate: 'gate', gong: 'gong' };
 export class Prop extends Entity {
@@ -820,10 +1011,9 @@ export class Prop extends Entity {
       const bob = this.def.sprite === 'wombat' ? 0 : Math.sin(g.time * 2 + this.id) * 0.8;
       const topY = this.bottom + 2 + bob;
       drawSprite(ctx, this.def.sprite, this.cx, topY, { flip: g.player && g.player.cx < this.cx });
-      if (this.def.quest) {
-        const marker = g.questMarker(this.def.quest);
-        if (marker) drawQuestMarker(ctx, this.cx, topY - 18, marker, g.time, this.id);
-      }
+      const marker = this.def.dialog === 'mama' ? g.mamaMarker()
+        : this.def.quest ? g.questMarker(this.def.quest) : null;
+      if (marker) drawQuestMarker(ctx, this.cx, topY - 18, marker, g.time, this.id);
       return;
     }
     if (this.kind === 'trinket') {

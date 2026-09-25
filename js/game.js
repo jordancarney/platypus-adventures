@@ -1,12 +1,13 @@
 // Game orchestration: modes, areas, camera, spawning, combat, triggers, economy.
 import { VIEW_W, VIEW_H, TILE, SWORD_DMG, ARROWS, ARROW_TYPES, VESSEL_COSTS, HEART_PER_SHARD,
-  CRAYFISH_HEAL, AMMO_CAPS, MAX_LEVEL, SHIELD_REFLECT, PLAYER, TELEPORT, SPRINT, DEBUG, SIDE_QUESTS } from './config.js';
+  CRAYFISH_HEAL, AMMO_CAPS, MAX_LEVEL, SHIELD_REFLECT, PLAYER, TELEPORT, SPRINT, DEBUG, SIDE_QUESTS,
+  GOD_SWORD_LV, PUGGLE_TOTAL, REGION_NAMES } from './config.js';
 import { clamp, dist, aabb, lerp } from './util.js';
 import { T, drawTileTo, buildTileAtlas, isSolid } from './tiles.js';
-import { buildOverworld, REGION, LM } from './worldgen.js';
+import { buildOverworld, REGION, REGION_KEYS, LM } from './worldgen.js';
 import { buildDungeon } from './dungeons.js';
 import * as arena from './arena.js';
-import { Player, Arrow, Pickup, Chest, Pot, PushBlock, Prop, Dolphin, DOLPHIN_LINES, moveEntity } from './entities.js';
+import { Player, Arrow, SwordBeam, Pickup, Chest, Pot, PushBlock, Prop, Dolphin, Puggle, HomePuggle, DOLPHIN_LINES, moveEntity } from './entities.js';
 import { makeEnemy } from './enemies.js';
 import { saveSlot, loadSlot, clearSlot, listSlots, SLOTS } from './save.js';
 import { input } from './input.js';
@@ -20,6 +21,8 @@ import { wrapText } from './font.js';
 const DIALOG_WRAP_PX = VIEW_W - 36;
 
 const REGION_MUSIC = ['marsh', 'fire', 'water', 'air', 'earth', 'confluence', 'village'];
+// what's left behind when grass is cut or a cracked rock breaks, per overworld region
+const REGION_GROUND = [T.GRASS, T.ASH, T.SAND, T.PATH, T.DARKGRASS, T.STORMGRASS, T.GRASS];
 const GATE_KEYS = { fire: 'fireGate', water: 'waterGate', air: 'airGate', earth: 'earthGate', nexus: 'nexusGate', arena: 'arenaGate' };
 
 export class Game {
@@ -81,7 +84,7 @@ export class Game {
       arrows: { ammo: 0, cap: PLAYER.baseAmmoCap, types },
       arrowSel: 'regular', quiver: 0,
       shards: 0, vessels: 0, arenaBest: 0,
-      dungeonsDone: {}, keys: {}, fangs: {}, flags: {}, quests: {},
+      dungeonsDone: {}, keys: {}, fangs: {}, flags: {}, quests: {}, puggles: {},
       area: 'overworld', pos: null,
       god: false,
     };
@@ -188,15 +191,27 @@ export class Game {
         case 'block': this.ents.push(new PushBlock(p.tx, p.ty)); break;
         case 'gate': if (!this.state.flags.gate_open) this.ents.push(new Prop(p)); break;
         case 'dungeon': this.dungeonDoors.push(p); break;
+        case 'puggle': if (!this.state.puggles[p.id]) this.ents.push(new Puggle(p)); break;
         default: this.ents.push(new Prop(p));
       }
     }
 
     for (const sp of this.area.spawners) { sp.ent = null; sp.cd = 0; }
+    this.spawnBrood();
 
-    // wards already solved stay open
+    // puzzles already solved stay solved: wards open, eyes lit, stones sat on their plates
+    this.activeRace = null;
     for (const p of this.area.puzzles || []) {
-      if (this.puzzleSolved(p)) for (const [x, y] of p.doors) this.area.set(x, y, p.ground);
+      if (!this.puzzleSolved(p)) continue;
+      for (const [x, y] of p.doors) this.area.set(x, y, p.ground);
+      for (const [x, y] of p.eyes || []) this.area.set(x, y, T.EYE_ON);
+      (p.plates || []).forEach(([x, y], i) => {
+        this.area.set(x, y, T.PLATE_DOWN);
+        const [bx, by] = (p.blocks || [])[i] || [];
+        const blk = this.ents.find(e => e instanceof PushBlock && e.x === bx * TILE && e.y === by * TILE);
+        if (blk) { blk.x = x * TILE; blk.y = y * TILE; }
+      });
+      if (p.start) this.area.set(p.start[0], p.start[1], T.PLATE_DOWN);
     }
 
     if (this.area.type === 'overworld') {
@@ -474,13 +489,7 @@ export class Game {
   breakTile(tx, ty, live) {
     const id = this.area.get(tx, ty);
     if (id !== T.DCRACK && id !== T.CRACKROCK && id !== T.CRYSTAL) return;
-    let ground = T.GRASS;
-    if (this.area.type === 'dungeon') ground = T.DFLOOR;
-    else {
-      const rg = this.area.regionAt(tx, ty);
-      ground = [T.GRASS, T.ASH, T.SAND, T.PATH, T.DARKGRASS, T.STORMGRASS, T.GRASS][rg] ?? T.GRASS;
-    }
-    this.area.set(tx, ty, ground);
+    this.area.set(tx, ty, this.area.type === 'dungeon' ? T.DFLOOR : this.groundAt(tx, ty));
     if (live) {
       this.burst(tx * TILE + 8, ty * TILE + 8, '#8a8278', 8);
       if (id === T.CRYSTAL) {
@@ -490,13 +499,18 @@ export class Game {
       }
     }
   }
+  groundAt(tx, ty) {
+    return this.area.regionAt ? REGION_GROUND[this.area.regionAt(tx, ty)] ?? T.GRASS : T.GRASS;
+  }
   shockwave(x, y, maxR, dmg) {
     this.effects.push({ kind: 'ring', x, y, r: 10, maxR, dmg, hit: false });
   }
   cutTile(tx, ty) {
     const id = this.area.get(tx, ty);
     if (id === T.TALLGRASS || id === T.REED) {
-      this.area.set(tx, ty, id === T.REED ? T.SHALLOW : T.GRASS);
+      // cut grass leaves the region's own ground, so a lone tuft on ash or sand doesn't
+      // leave a square of lawn behind
+      this.area.set(tx, ty, id === T.REED ? T.SHALLOW : this.groundAt(tx, ty));
       this.burst(tx * TILE + 8, ty * TILE + 8, '#58a044', 6);
       const r = Math.random();
       const cx = tx * TILE + 8, cy = ty * TILE + 8;
@@ -643,6 +657,97 @@ export class Game {
     }
   }
 
+  // ------------------------------------------------ puggles
+  // Fifty baby platypuses hidden around the overworld (see worldgen.js). Each one found
+  // runs home to Mama Pearl in the village; finding all of them earns the God Sword.
+  puggleCount() { return Object.keys(this.state.puggles || {}).length; }
+
+  // Every puggle found so far plays in Mama's meadow, each in its own look, laid out on a
+  // sunflower spiral around her so even all fifty read as a crowd rather than a pile.
+  spawnBrood() {
+    this.ents = this.ents.filter(e => !(e instanceof HomePuggle));
+    const mama = (this.area.props || []).find(p => p.dialog === 'mama');
+    if (!mama) return;
+    const num = id => parseInt(id.split('_')[1], 10);
+    const ids = Object.keys(this.state.puggles).sort((a, b) => num(a) - num(b));
+    const cx = mama.tx * TILE + 8, cy = mama.ty * TILE + 16;
+    ids.forEach((id, i) => {
+      const r = 16 + 7 * Math.sqrt(i), a = i * 2.39996;
+      this.ents.push(new HomePuggle(id, cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.55));
+    });
+  }
+
+  collectPuggle(pg) {
+    const st = this.state;
+    pg.dead = true;
+    if (st.puggles[pg.pid]) return;
+    st.puggles[pg.pid] = true;
+    const n = this.puggleCount();
+    this.spawnBrood();    // it scurries straight home to the meadow
+    audio.sfx('puggle');
+    this.burst(pg.cx, pg.cy - 4, '#ff9ad0', 8);
+    this.burst(pg.cx, pg.cy - 4, '#fff6c8', 6);
+    if (n >= PUGGLE_TOTAL && !st.flags.god_sword) {
+      this.setBanner(`ALL ${PUGGLE_TOTAL} PUGGLES FOUND!`, 'Every little one is home safe with Mama!', '#ff9ad0',
+        () => this.grantGodSword());
+    } else if (n === 1 && !st.flags.mama_met) {
+      this.openDialog(null, 'A PUGGLE -- a baby platypus! It squeaks happily and scurries off toward Billabong Village.|Somebody there must be missing it...');
+    } else {
+      this.toast(`Peep! You found a puggle!  ${n} / ${PUGGLE_TOTAL}`);
+    }
+    this.save();
+  }
+
+  grantGodSword() {
+    const st = this.state;
+    st.flags.god_sword = true;
+    st.sword = GOD_SWORD_LV;
+    audio.sfx('shard');
+    this.shake(5, 0.6);
+    this.burst(this.player.cx, this.player.cy - 8, '#fff6c8', 20);
+    this.burst(this.player.cx, this.player.cy - 8, '#ffd84a', 14);
+    this.setBanner('THE GOD SWORD!', 'At full health, it fires a beam of light!', '#fff6c8');
+    this.save();
+  }
+
+  mamaMarker() {
+    return this.state.flags.mama_met ? null : 'new';
+  }
+
+  // Mama's hint: the region with the most puggles still out there (from the live world, so
+  // it's only ever given in the overworld, which is the only place she lives).
+  puggleHint() {
+    const left = {};
+    for (const p of this.area.props || []) {
+      if (p.kind !== 'puggle' || this.state.puggles[p.id]) continue;
+      const key = REGION_KEYS[this.area.regionAt(p.tx, p.ty)];
+      left[key] = (left[key] || 0) + 1;
+    }
+    const [key, n] = Object.entries(left).sort((a, b) => b[1] - a[1])[0] || [];
+    if (!key) return '';
+    if (key === 'confluence' && !this.state.flags.gate_open) {
+      return n === 1 ? 'The last one slipped past the Great Gate, into the Confluence!'
+        : `${n} of them slipped past the Great Gate, into the Confluence!`;
+    }
+    const where = key === 'village' ? 'right around the village' : 'out in ' + REGION_NAMES[key].replace(/^The /, 'the ');
+    return n === 1 ? `I can hear one little peep ${where}.`
+      : `I can hear little peeps ${where} -- ${n} are still out there.`;
+  }
+
+  mamaDialog(d) {
+    const st = this.state, n = this.puggleCount();
+    if (!st.flags.mama_met) {
+      const found = n ? `|You've already found ${n}! Bless you.` : '';
+      this.openDialog(d.name,
+        `Oh, Gus! My ${PUGGLE_TOTAL} little puggles wandered off to explore the whole Vale, and they do love to hide!|They tuck themselves into tall grass and reeds, curl up under cracked rocks, and paddle out in deep water.|Some only pop out when you win their little games -- a stone out of place, a strange stone eye, a plate that wants a race.|Every one you find will scurry straight home to me. Find all ${PUGGLE_TOTAL}, and the GOD SWORD is yours -- the mightiest blade in the Vale!${found}`,
+        () => { st.flags.mama_met = true; this.save(); });
+    } else if (st.flags.god_sword) {
+      this.openDialog(d.name, "All my babies are home safe, thanks to you. Keep that God Sword shining, Gus -- with every heart full, it throws a beam of pure light!");
+    } else {
+      this.openDialog(d.name, `${n} of my ${PUGGLE_TOTAL} puggles are home! ${this.puggleHint()}`);
+    }
+  }
+
   // ------------------------------------------------ side quests
   // Fetch quests: new -> active -> ready (item flag set) -> done.
   // Rescue quests have no offer step -- they start visibly in trouble and complete the
@@ -737,6 +842,8 @@ export class Game {
       this.rescueQuestDialog(d.name, 'fenwick_rescue');
     } else if (d.dialog === 'yuma') {
       this.fetchQuestDialog(d.name, 'yuma_chime');
+    } else if (d.dialog === 'mama') {
+      this.mamaDialog(d);
     }
   }
 
@@ -963,7 +1070,7 @@ export class Game {
     for (const [x, y] of p.eyes) this.area.set(x, y, T.EYE);
     p.step = 0;
     p.timer = 0;
-    if (noisy) { audio.sfx('denied'); this.toast('The seals go dark. Try again.'); }
+    if (noisy) { audio.sfx('denied'); this.toast(p.resetToast || 'The seals go dark. Try again.'); }
   }
 
   puzzleEyeHit(p, tx, ty) {
@@ -998,6 +1105,8 @@ export class Game {
   solvePuzzle(p) {
     if (this.puzzleSolved(p)) return;
     this.state.flags['puzzle_' + p.id] = true;
+    // puggle puzzles just free their puggle, which hops out on its own next frame
+    if (p.puggle) { audio.sfx('switch'); this.toast('Peep! A puggle pops out!'); this.save(); return; }
     audio.sfx('shard');
     this.shake(4, 0.4);
     if (p.quest) { this.completeQuest(p.quest); return; }
@@ -1018,6 +1127,8 @@ export class Game {
         if (p.timer <= 0) this.puzzleResetEyes(p, true);
       } else if (p.kind === 'blocks') {
         this.puzzleCheckPlates(p);
+      } else if (p.kind === 'race') {
+        this.updateRace(p, dt);
       } else if (p.kind === 'killall') {
         if (!p.armed) {
           // guardians wake when Gus steps into the courtyard
@@ -1035,6 +1146,60 @@ export class Game {
         }
       }
     }
+  }
+
+  // Puggle dash: stepping on the start plate starts the clock; reach the goal ring in time.
+  // A failed run has to step off the plate and back on, so standing still doesn't loop it.
+  updateRace(p, dt) {
+    const pl = this.player;
+    const [sx, sy] = p.start;
+    const onStart = Math.floor(pl.cx / TILE) === sx && Math.floor(pl.cy / TILE) === sy;
+    if (!p.running) {
+      if (!onStart) p.rearm = true;
+      else if (p.rearm !== false) {
+        p.running = true; p.rearm = false;
+        p.timer = p.limit;
+        this.activeRace = p;
+        this.area.set(sx, sy, T.PLATE_DOWN);
+        audio.sfx('switch');
+        this.toast(`Puggle dash! Reach the glowing ring!`);
+      }
+      return;
+    }
+    const was = p.timer;
+    p.timer -= dt;
+    if (Math.ceil(p.timer) < Math.ceil(was) && p.timer > 0) audio.sfx('blip');
+    const [gx, gy] = p.goal;
+    if (dist(pl.cx, pl.cy, gx * TILE + 8, gy * TILE + 8) < 14) {
+      p.running = false;
+      this.activeRace = null;
+      this.burst(gx * TILE + 8, gy * TILE + 8, '#ffd84a', 14);
+      this.solvePuzzle(p);
+    } else if (p.timer <= 0) {
+      p.running = false;
+      this.activeRace = null;
+      this.area.set(sx, sy, T.PLATE);
+      audio.sfx('denied');
+      this.toast('Too slow! Step on the plate to try again.');
+    }
+  }
+
+  // The dash's goal: a pulsing golden ring with a beacon, drawn on the ground.
+  drawRaceGoal(ctx, p) {
+    const [gx, gy] = p.goal;
+    const x = gx * TILE + 8, y = gy * TILE + 10;
+    const pulse = 0.5 + 0.5 * Math.sin(this.time * 8);
+    ctx.save();
+    const grad = ctx.createLinearGradient(x, y - 60, x, y);
+    grad.addColorStop(0, 'rgba(255,216,74,0)');
+    grad.addColorStop(1, 'rgba(255,216,74,0.55)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(x - 5, y - 60, 10, 60);
+    ctx.strokeStyle = '#ffd84a';
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.6 + 0.4 * pulse;
+    ctx.beginPath(); ctx.ellipse(x, y, 10 + pulse * 2, 5 + pulse, 0, 0, 7); ctx.stroke();
+    ctx.restore();
   }
 
   // ------------------------------------------------ the Crucible (wave arena)
@@ -1253,7 +1418,7 @@ export class Game {
         continue;
       }
 
-      if (e instanceof Arrow) {
+      if (e instanceof Arrow || e instanceof SwordBeam) {
         for (const en of this.ents) {
           if (e.dead) break;
           if (en.team === 'enemy' && !en.isShot && !en.dead && !en.submerged && aabb(e.box(), en.box())) e.onHitEnemy(this, en);
@@ -1514,7 +1679,7 @@ export class Game {
     if (!DEBUG) return;
     const st = this.state;
     if (input.pressed('dbgGear')) {
-      st.sword = MAX_LEVEL; st.shield = MAX_LEVEL; st.bow = MAX_LEVEL; st.armor = MAX_LEVEL;
+      st.sword = Math.max(st.sword, MAX_LEVEL); st.shield = MAX_LEVEL; st.bow = MAX_LEVEL; st.armor = MAX_LEVEL;
       for (const t of ARROW_TYPES) { st.arrows.types[t].owned = true; st.arrows.types[t].level = MAX_LEVEL; }
       st.quiver = MAX_LEVEL;
       st.arrows.cap = AMMO_CAPS[MAX_LEVEL]; st.arrows.ammo = st.arrows.cap;
@@ -1532,6 +1697,16 @@ export class Game {
     }
     if (input.pressed('dbgHeal')) { st.hp = st.maxHp; this.toast('DEBUG: healed'); }
     if (input.pressed('dbgRich')) { st.coins += 500; st.diamonds += 50; this.toast('DEBUG: rich'); }
+    // all but one puggle at a time; press again with one left to find the last for real
+    if (input.pressed('dbgPuggles') && this.area.type === 'overworld') {
+      const left = this.ents.filter(e => e instanceof Puggle && !e.dead);
+      if (left.length === 1) this.collectPuggle(left[0]);
+      else {
+        for (const e of left.slice(1)) { st.puggles[e.pid] = true; e.dead = true; }
+        this.spawnBrood();
+        if (left[0]) this.toast(`DEBUG: last puggle at ${left[0].def.tx},${left[0].def.ty}`);
+      }
+    }
     if (input.pressed('dbgGod')) { st.god = !st.god; this.toast('DEBUG: god ' + (st.god ? 'ON' : 'OFF')); }
   }
 
@@ -1568,8 +1743,9 @@ export class Game {
       }
     }
 
-    // warp runes sit on the ground, so they go under everything
+    // warp runes and a dash's goal ring sit on the ground, so they go under everything
     if (this.warpT > 0 && this.player) this.drawWarpCharge(ctx);
+    if (this.activeRace) this.drawRaceGoal(ctx, this.activeRace);
 
     // entities y-sorted
     const drawList = [...this.ents, this.player].filter(e => e && !e.dead);

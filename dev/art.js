@@ -15,7 +15,8 @@ function card(group, name, armor = 0) {
 for (let n = 1; n <= 6; n++) card('hero', 'gus_idle', n);
 ['rakali', 'adder', 'snapjaw', 'emberfox', 'mgoanna', 'kooka', 'volteel', 'cod', 'snapshell', 'talon', 'owl', 'dingo', 'wildcat', 'python', 'tazzy', 'gknight', 'boss_scorchjaw', 'boss_murkmaw', 'boss_galestrike', 'boss_kinggoanna', 'boss_apexus'].forEach(n => card('enemies', n));
 for (const prefix of ['sword', 'bow', 'shield']) for (let n = 1; n <= 6; n++) card('items', prefix + n);
-['coin', 'diamond', 'chest', 'chest_open', 'pot', 'bomb', 'key', 'crayfish', 'arrow_regular', 'arrow_fire', 'arrow_ice', 'arrow_lightning', 'arrow_bomb', 'arrow_light', 'statue', 'elder', 'wombat', 'dolphin'].forEach(n => card('items', n));
+card('items', 'sword7');   // the God Sword
+['coin', 'diamond', 'chest', 'chest_open', 'pot', 'bomb', 'key', 'crayfish', 'arrow_regular', 'arrow_fire', 'arrow_ice', 'arrow_lightning', 'arrow_bomb', 'arrow_light', 'statue', 'elder', 'wombat', 'dolphin', 'mama', 'puggle', 'puggle_cream', 'puggle_choc'].forEach(n => card('items', n));
 const vale = document.getElementById('vale').getContext('2d');
 const dungeon = document.getElementById('dungeon').getContext('2d');
 const atlasCtx = document.getElementById('tiles').getContext('2d');

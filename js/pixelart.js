@@ -777,9 +777,115 @@ DEFS.wombat = { colors: { b: '#8a6a4a', l: '#c0a888', e: '#14100c', o: '#5a4432'
   '..dhd.dhhd......',
 ]};
 DEFS.villager = { colors: { ...GUS_COLORS, b: '#a06a3a', l: '#d8b088' }, shade: GUS_SHADE, map: DEFS.gus_idle.map };
-DEFS.heart = { colors: { r: '#e04a5a', h: '#ff9aa8', d: '#8a1a2a' }, map: [
-  '.rr.rr.', 'rhrrrrr', 'rrrrrrr', '.rrrrr.', '..rrr..', '...r...',
+// Mama Pearl: Gus's build in a warmer coat, a pink apron where his scarf sits, and a
+// flower tucked behind her ear so she reads as someone new at a glance.
+DEFS.mama = { colors: { ...GUS_COLORS, b: '#8a5a44', l: '#f0cc98', m: '#e27aa4', r: '#ff9ad0', y: '#ffe066' }, shade: GUS_SHADE, map: [
+  '..r..ddddd......',
+  '.ryrdBBbbbd.....',
+  '..rdBBbbbbbd....',
+  '...dbbbbwwed....',
+  '...dbbbbweedddd.',
+  '....dbbbdOOoood.',
+  '....dbbbbdpppd..',
+  '...dbmMMmmbbd...',
+  '...dbmMMmmkbbd..',
+  '..udbmmmmmkbbd..',
+  '.uutbmmmmkkbbd..',
+  'uutdbbllkbbbsd..',
+  'utudbsbbbbbssd..',
+  '.ttddssbbbbsdd..',
+  '..t..fFF.ffF....',
+  '....FFFf.FFFf...',
 ]};
+// Puggles (baby platypuses): Gus in miniature -- big head, stubby bill, round belly --
+// in a lighter, fluffier coat. The second frame is a waddle. The grid is padded (2 columns
+// each side, 2 rows on top) so the accessory overlays below can stick out past the body.
+const PUGGLE_COLORS = { ...GUS_COLORS, b: '#b07a52', l: '#f2d29c', o: '#f0b862', t: '#7a5260' };
+DEFS.puggle = { colors: PUGGLE_COLORS, shade: GUS_SHADE, map: [
+  '...............',
+  '...............',
+  '.....dddd......',
+  '....dBBbbd.....',
+  '...dBbbbwed....',
+  '...dbbbbeeddd..',
+  '....dbbdOOood..',
+  '....dbbbdppd...',
+  '...udLLlkbd....',
+  '..uudllkbbd....',
+  '...tddbbbsd....',
+  '.....fF.fF.....',
+], map2: [
+  '...............',
+  '...............',
+  '.....dddd......',
+  '....dBBbbd.....',
+  '...dBbbbwed....',
+  '...dbbbbeeddd..',
+  '....dbbdOOood..',
+  '....dbbbdppd...',
+  '...udLLlkbd....',
+  '..utdllkbbd....',
+  '....tdbbbsd....',
+  '....fF...fF....',
+]};
+// Accessories drawn over a puggle on the same grid, so no two broods look alike.
+DEFS.pg_bow = { colors: { r: '#ff7ab0', k: '#c04a7a' }, map: [
+  '...rR.Rr.......',
+  '...rrkrr.......',
+  '....r..r.......',
+]};
+DEFS.pg_leaf = { colors: { g: '#6ab04a', k: '#4a3a2a' }, map: [
+  '.......Gg......',
+  '.....gggg......',
+  '......k........',
+]};
+DEFS.pg_flower = { colors: { y: '#ffe066', o: '#f08a3a' }, map: [
+  '....y..........',
+  '...yoy.........',
+  '....y..........',
+]};
+DEFS.pg_crown = { colors: { y: '#ffd84a', r: '#e04a5a' }, map: [
+  '....y.y.y......',
+  '....yYrYy......',
+]};
+DEFS.pg_shades = { colors: { k: '#1a1a24', w: '#8ab8e0' }, map: [
+  '...............',
+  '...............',
+  '...............',
+  '...............',
+  '.....kkkwk.....',
+  '........kk.....',
+]};
+DEFS.pg_scarf = { colors: { m: '#388c86' }, map: [
+  '...............',
+  '...............',
+  '...............',
+  '...............',
+  '...............',
+  '...............',
+  '...............',
+  '....mMMm.......',
+  '..mm...........',
+]};
+// a stick held up like a sword, crossguard and all -- just like Gus's
+DEFS.pg_stick = { colors: { w: '#b88a58', k: '#6a4a2a', h: '#f2d29c' }, map: [
+  '...............',
+  '.............W.',
+  '.............w.',
+  '.............w.',
+  '.............w.',
+  '.............w.',
+  '.............w.',
+  '............kkk',
+  '...........hhk.',
+]};
+// overlays share the puggle's full 15x12 grid (sprites anchor bottom-centre), so pad them out
+export const PUGGLE_ACCESSORIES = ['pg_bow', 'pg_leaf', 'pg_stick', 'pg_flower', 'pg_scarf', 'pg_crown', 'pg_shades'];
+for (const k of PUGGLE_ACCESSORIES) {
+  const m = DEFS[k].map.map(r => r.padEnd(15, '.'));
+  while (m.length < 12) m.push('.'.repeat(15));
+  DEFS[k].map = m;
+}
 // ---------- FRIENDS ----------
 DEFS.dolphin = { colors: { b: '#5a8ab0', l: '#cfe6f4', e: '#14202a' }, shade: { d: ['b', -0.62], s: ['b', -0.3], k: ['l', -0.15] }, map: [
   '........dd......',
@@ -795,7 +901,8 @@ DEFS.dolphin = { colors: { b: '#5a8ab0', l: '#cfe6f4', e: '#14202a' }, shade: { 
 
 // ---------- WEAPONS ----------
 // The same tiny, outlined weapons appear in the art sheet and in combat.
-for (let tier = 1; tier <= 6; tier++) {
+// Tier 7 is the God Sword: no bow or shop step shares it, so its bow is skipped below.
+for (let tier = 1; tier < SWORD_LOOK.length; tier++) {
   const look = SWORD_LOOK[tier];
   const grid = Array.from({ length: 9 }, () => Array(look.len + 1).fill('.'));
   const box = (x, y, w, h, key) => {
@@ -809,7 +916,9 @@ for (let tier = 1; tier <= 6; tier++) {
   box(knee + 1, top, 2, look.w, 'd'); box(knee + 1, 4, 2, 1, 'h');
   box(look.len - 1, 4, 1, 1, 'h'); box(look.len, 4, 1, 1, 'd');
   if (tier >= 4) box(8, top + 1, 2, 1, 'g');
+  if (tier >= 7) { box(5, top - 2, 1, 1, 'h'); box(5, top + look.w + 1, 1, 1, 'h'); box(12, top + 1, 2, 1, 'g'); box(16, top + 1, 2, 1, 'g'); }
   DEFS['sword' + tier] = { colors: { d: look.dark, p: look.grip, g: look.guard, b: look.core, h: look.edge }, map: grid.map(row => row.join('')) };
+  if (tier > 6) continue;
   DEFS['bow' + tier] = { colors: { d: '#302b3e', b: tier < 3 ? '#a87952' : look.core, h: look.edge, g: look.guard, s: '#e4d4b1' }, map: [
     '....dd..', '...dhds.', '..dhbds.', '.dhbd.s.', '.dbd..s.', 'dhbd..s.',
     'dgbd..s.', 'dhbd..s.', '.dbd..s.', '.dhbd.s.', '..dhbds.', '...dhds.', '....dd..',
@@ -1019,6 +1128,9 @@ const VARIANTS = {
   mini_eel:    { base: 'eel', scale: 2, colors: { b: '#3a5a8a', s: '#243c5f', l: '#8ab8e0', e: '#ffe95c', o: '#ffe95c' } },
   mini_owl:    { base: 'owl', scale: 2, colors: { b: '#5a4a5a', w: '#7a6a7a', l: '#d0c8d0', e: '#ffd84a' } },
   mini_python: { base: 'serpent', scale: 2, colors: { b: '#6a5a2a', s: '#483c18', l: '#c8b47a' } },
+  // puggle coats
+  puggle_cream: { base: 'puggle', colors: { b: '#d6a878', l: '#fff0cc', t: '#a07a6a' } },
+  puggle_choc:  { base: 'puggle', colors: { b: '#7a4a30', l: '#e0b080', t: '#5a3a40' } },
 };
 
 // ---------- build ----------

@@ -28,7 +28,7 @@ export const KEYMAP = {
   Digit1: 'slot1', Digit2: 'slot2', Digit3: 'slot3',
   Digit4: 'slot4', Digit5: 'slot5', Digit6: 'slot6',
   // debug (only honored with ?debug=1)
-  F1: 'dbgGear', F2: 'dbgWarp', F3: 'dbgHeal', F4: 'dbgRich', KeyG: 'dbgGod',
+  F1: 'dbgGear', F2: 'dbgWarp', F3: 'dbgHeal', F4: 'dbgRich', F5: 'dbgPuggles', KeyG: 'dbgGod',
 };
 
 // --- player balance ---
@@ -61,8 +61,9 @@ export const SPRINT = {
 
 export const MAX_LEVEL = 6;   // every upgrade track tops out here
 
-// sword damage by level (1-6)
-export const SWORD_DMG = [0, 1, 2, 3, 4, 6, 8];
+// sword damage by level (1-6), plus the God Sword at 7 -- found, never bought (see PUGGLES)
+export const SWORD_DMG = [0, 1, 2, 3, 4, 6, 8, 20];
+export const GOD_SWORD_LV = 7;
 
 // Per-level sword visuals. Purely cosmetic — reach and damage are unchanged, so upgrading
 // reads as a visible glow-up without shifting the hitbox out from under the player.
@@ -81,7 +82,13 @@ export const SWORD_LOOK = [
     guard: '#f0c83a', grip: '#8a6a1a', trail: ['#ffffff', '#fff6c8', '#f0c83a', '#f0a03a'], trailAlpha: 0.85, glow: '#fff6c8', spark: '#fff6c8', sparkN: 11 },
   { name: 'Riverlight Fang', len: 22, w: 4, edge: '#ffffff', core: '#bff4ff', dark: '#3a8fb0',
     guard: '#7ad4ff', grip: '#2a6a8a', trail: ['#ffffff', '#ddfaff', '#7ad4ff', '#3aa8e0', '#2a6a8a'], trailAlpha: 0.95, glow: '#bff4ff', spark: '#ddfaff', sparkN: 15 },
+  { name: 'God Sword', len: 24, w: 4, edge: '#ffffff', core: '#fff3b0', dark: '#5a3a8a',
+    guard: '#ffd84a', grip: '#4a2a6a', trail: ['#ffffff', '#fff6c8', '#ffd84a', '#ff9ad0', '#c88aff', '#7ad4ff'], trailAlpha: 1, glow: '#fffbe0', spark: '#fff6c8', sparkN: 18 },
 ];
+
+// The God Sword's full-health beam (Zelda style): one on screen at a time, same damage as
+// a slash, and it strikes eye switches like an arrow does.
+export const GOD_BEAM = { speed: 300, range: 240 };
 // flat damage reduction by armor tier (0-6); incoming damage is never reduced below 1
 export const ARMOR_REDUCE = [0, 1, 2, 3, 4, 5, 6];
 
@@ -264,5 +271,9 @@ export const SIDE_QUESTS = {
     done: "Listen -- that's her chime on the wind again. All thanks to you.",
   },
 };
+
+// Puggles: baby platypuses hidden across the overworld (placed in worldgen.js). Finding
+// every one earns the God Sword. The count here must match what worldgen places.
+export const PUGGLE_TOTAL = 50;
 
 export const DEBUG = new URLSearchParams(location.search).has('debug');

@@ -17,7 +17,8 @@ Primal Chimera.
 - Always rendered **standing upright** (Cat Quest style) on a top-down world.
 - Moves 8-directionally; attacks aim in the 4 cardinal directions (last direction pressed).
 - Can swim in deep water (he's a platypus!) at reduced speed; can't attack while swimming.
-- **Sword** (from the start): arc slash, levels 1–6, upgraded at the shop.
+- **Sword** (from the start): arc slash, levels 1–6, upgraded at the shop. Finding all 50
+  puggles earns the **God Sword** (level 7, see [Puggles](#puggles-and-the-god-sword)).
 - **Shield** (from Elder Mirri): hold to block frontal hits; upgrades widen block/deflect projectiles.
 - **Bow** (chest in Billabong Village): fires the selected arrow type; uses one shared ammo pool.
 - **Armor**: levels 1–6, reduces damage, visually tints Gus.
@@ -247,6 +248,56 @@ walled items without ever bombing them open.
 | Fenwick's Peril | Fenwick (NE edge, Cinderscale Wastes) | 120 coins, 5 diamonds |
 | Yuma's Wind Chime | Yuma (NW edge, Skyreach Bluffs) | 100 coins, 5 diamonds |
 
+## Puggles and the God Sword
+
+Fifty **puggles** (baby platypuses) are hidden around the overworld, Korok-style. Walking
+into one sends it home to **Mama Pearl**, who waits in the Puggle Meadow just outside the
+village's south gate on the burrow road. Every puggle found so far plays in the meadow
+(`HomePuggle`, laid out on a sunflower spiral around her so all fifty still read as a crowd).
+The map shows `PUGGLES n / 50`, puts a small dot where each found one was (like BotW's seed
+markers, so blank stretches show where to look), and the file-select card shows the count.
+Talking to Mama gives a hint: the region with the most puggles still out there.
+
+Each puggle has its own look, fixed by its id (`puggleLook` in entities.js): one of three
+coats (tan, cream, chocolate) and either nothing or one accessory overlay -- a bow, leaf hat,
+flower, stick sword, Gus's scarf, crown or sunglasses. Overlays share the puggle's padded
+15x12 grid in pixelart.js so they register on both animation frames.
+
+Placement lives at the end of `buildOverworld` (worldgen.js), built from fixed shapes with no
+rng draws so nothing generated above it moves. **The number in each `puggle_N` id is a save
+key: never renumber, only add** (and bump `PUGGLE_TOTAL` in config.js to match).
+
+| Where | How it hides |
+|---|---|
+| Plain sight | tucked into a pocket of trees/mesa/basalt, a lava-lake island on a one-plank bridge, a lagoon islet, behind the Crucible, a thorn patch's heart |
+| Under cover | tall grass or reeds (cut them), cracked rock or crystal (bomb arrow), or sealed in by a ring of cracked rock |
+| Swimming | out in deep water: the lagoon, the river, the marsh pond |
+| Puzzle | hidden until solved (below) |
+
+A covered puggle glitters and gives the odd peep when Gus is close; puzzle puggles don't.
+Uncovering one makes it hop out with a squeak.
+
+**Puzzles** are ordinary `puzzles` entries with a `puggle` field instead of doors -- solving
+one frees the puggle rather than opening a ward. Thirteen in all, every one solvable with the
+starting kit except where the region itself needs more (the Confluence):
+
+| Kind | Count | Mechanic |
+|---|---|---|
+| Stones (`blocks`) | 3 | push the stone(s) onto the plate(s) |
+| Eyes (`sequence`/`timed`) | 4 | strike one eye in a mesa face, or light 2-3 eyes within a few seconds |
+| Nest (`killall`) | 4 | a pack of the region's predators guards it |
+| Puggle Dash (`race`) | 2 | step on the plate, reach the glowing ring in time; walking fails, sprinting makes it |
+
+Solved puzzles stay solved on reload: eyes stay lit, stones sit on their plates, and the dash
+plate stays pressed (this also applies to the ward puzzles).
+
+**The God Sword** (`GOD_SWORD_LV` = 7) is granted the moment the fiftieth puggle is found:
+20 damage a slash (Riverlight Fang is 8), a rainbow trail, and -- Zelda style -- while Gus is
+at full health every swing also throws a **sword beam** (`SwordBeam`, `GOD_BEAM` in config):
+one on screen at a time, same damage as the slash, bursts into four diagonal sparks, and
+strikes eye switches like an arrow. A faint glitter at Gus's side means the beam is ready. It
+is never sold: the shop's sword track ends at 6.
+
 ## The Crucible (wave arena)
 
 A colosseum on the sand just outside the village's east gate — a coin/diamond sink-filler
@@ -279,7 +330,8 @@ that gives the shop and shrine economies somewhere to draw from once the overwor
 ### Dev/debug
 
 Open with `?debug=1` for cheats: F1 = unlock all gear, F2 = warp between dungeons,
-F3 = full heal, F4 = +500 coins/+50 diamonds, G = god mode.
+F3 = full heal, F4 = +500 coins/+50 diamonds, F5 = find all puggles but one (again for the
+last, which grants the God Sword), G = god mode.
 
 ## File map
 

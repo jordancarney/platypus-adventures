@@ -77,6 +77,11 @@ const SFX = {
   warpOff:() => tone({ f: 420, f2: 150, dur: 0.16, type: 'triangle', vol: 0.22 }),
   winded: () => { noise({ dur: 0.2, vol: 0.2, low: true }); tone({ f: 320, f2: 170, dur: 0.18, type: 'triangle', vol: 0.16 }); },
   fanfare:() => { [392, 392, 392, 523, 659, 784].forEach((f, i) => tone({ f, dur: i === 5 ? 0.4 : 0.11, type: 'square', vol: 0.32, at: i * 0.11 })); },
+  // a puggle's squeak: a quick bright chirp up and down (peep is the quiet hint version)
+  peep:   () => tone({ f: 1700, f2: 2300, dur: 0.07, type: 'sine', vol: 0.14 }),
+  puggle: () => { tone({ f: 1400, f2: 2100, dur: 0.08, type: 'sine', vol: 0.3 }); tone({ f: 1900, f2: 2600, dur: 0.1, type: 'sine', vol: 0.28, at: 0.1 });
+    [1047, 1319, 1568].forEach((f, i) => tone({ f, dur: 0.09, type: 'triangle', vol: 0.22, at: 0.2 + i * 0.07 })); },
+  beam:   () => { tone({ f: 700, f2: 1800, dur: 0.16, type: 'sawtooth', vol: 0.16 }); tone({ f: 1400, f2: 2800, dur: 0.2, type: 'triangle', vol: 0.2, at: 0.02 }); },
   stairs: () => { [700, 560, 450, 360].forEach((f, i) => tone({ f, dur: 0.09, type: 'triangle', vol: 0.3, at: i * 0.07 })); },
 };
 
