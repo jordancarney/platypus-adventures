@@ -777,6 +777,9 @@ DEFS.wombat = { colors: { b: '#8a6a4a', l: '#c0a888', e: '#14100c', o: '#5a4432'
   '..dhd.dhhd......',
 ]};
 DEFS.villager = { colors: { ...GUS_COLORS, b: '#a06a3a', l: '#d8b088' }, shade: GUS_SHADE, map: DEFS.gus_idle.map };
+DEFS.heart = { colors: { r: '#e04a5a', h: '#ff9aa8', d: '#8a1a2a' }, map: [
+  '.rr.rr.', 'rhrrrrr', 'rrrrrrr', '.rrrrr.', '..rrr..', '...r...',
+]};
 // Mama Pearl: Gus's build in a warmer coat, a pink apron where his scarf sits, and a
 // flower tucked behind her ear so she reads as someone new at a glance.
 DEFS.mama = { colors: { ...GUS_COLORS, b: '#8a5a44', l: '#f0cc98', m: '#e27aa4', r: '#ff9ad0', y: '#ffe066' }, shade: GUS_SHADE, map: [
