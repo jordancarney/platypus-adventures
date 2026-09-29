@@ -16,6 +16,13 @@ export const T = {
   DFLOOR: 30, DWALL: 31, DOOR_OPEN: 32, DOOR_LOCKED: 33, DOOR_BOSS: 34, DOOR_SHUT: 35,
   DCRACK: 36, DWATER: 37, DLAVA: 38, SPIKES: 39, PLATE: 40, PLATE_DOWN: 41,
   EYE: 42, EYE_ON: 43, STAIRS: 44, TORCH: 45, DDECOR: 46, GUST: 47,
+  // house exteriors: a front door (walk into it to go inside) and a window, set in WALL
+  HDOOR: 48, WINDOW: 49, SHOPWALL: 50,
+  // the footprint under a building drawn as one big sprite (Gus's burrow, Mama's cottage)
+  BUILDING: 51,
+  // house interiors (theme-colored): floorboards, the back wall's two visible rows (with an
+  // optional window), the timber wall tops seen from above, a bordered rug, and the doormat
+  HFLOOR: 52, HWALL_UP: 53, HWALL: 54, HWIN: 55, HBEAM: 56, RUG: 57, EXIT: 58,
 };
 
 // ---------- tile properties ----------
@@ -38,6 +45,10 @@ def(T.DCRACK, { solid: true, crack: true }); def(T.DWATER, { deep: true }); def(
 def(T.SPIKES, { dmg: 1 }); def(T.PLATE, {}); def(T.PLATE_DOWN, {});
 def(T.EYE, { solid: true, eye: true }); def(T.EYE_ON, { solid: true });
 def(T.STAIRS, {}); def(T.TORCH, { solid: true }); def(T.DDECOR, {}); def(T.GUST, {});
+def(T.HDOOR, { door: true }); def(T.WINDOW, { solid: true }); def(T.SHOPWALL, { solid: true });
+def(T.BUILDING, { solid: true });
+def(T.HFLOOR, {}); def(T.HWALL_UP, { solid: true }); def(T.HWALL, { solid: true }); def(T.HWIN, { solid: true });
+def(T.HBEAM, { solid: true }); def(T.RUG, {}); def(T.EXIT, {});
 
 // ---------- dungeon themes ----------
 export const THEMES = {
@@ -49,7 +60,31 @@ export const THEMES = {
   earth: { floor: '#3a3020', floor2: '#443826', wall: '#5a4a2e', wallTop: '#7a6642', accent: '#a8d84a' },
   nexus: { floor: '#2c2038', floor2: '#342644', wall: '#4a3462', wallTop: '#664a86', accent: '#c88aff' },
   arena: { floor: '#c2a86c', floor2: '#d4bc80', wall: '#8a7a5e', wallTop: '#b09a78', accent: '#f0c83a' },
+  // House interiors. `paper`/`paper2` and `pattern` dress the back wall, `trim` is the
+  // wainscot and crown moulding, `beam` the wall tops seen from above, and `accent`/`rug2`
+  // the rug and its border. Themes without these (the dungeons) fall back to their masonry.
+  burrow:  { floor: '#9a7048', floor2: '#b08658', wall: '#7a5236', wallTop: '#94684a', accent: '#3f8c86',
+    paper: '#80573a', paper2: '#6c4930', pattern: 'roots', trim: '#5a3a26', beam: '#4a3222', rug2: '#e8b860' },
+  cottage: { floor: '#c89e70', floor2: '#dab282', wall: '#d8a0b4', wallTop: '#e8b8c8', accent: '#d8708e',
+    paper: '#eab8c8', paper2: '#f8dce4', pattern: 'dots', trim: '#b8788c', beam: '#8a5a58', rug2: '#fff0f4' },
+  shop:    { floor: '#7c5c3e', floor2: '#8e6c4a', wall: '#6a5238', wallTop: '#846848', accent: '#a8443a',
+    paper: '#6e5640', paper2: '#5e4834', pattern: 'planks', trim: '#3e2e20', beam: '#34261a', rug2: '#f0c83a' },
+  home:    { floor: '#a88258', floor2: '#ba9468', wall: '#7e9e7e', wallTop: '#98b898', accent: '#4e70a8',
+    paper: '#8aae8a', paper2: '#9ec29c', pattern: 'stripes', trim: '#5a7458', beam: '#54402e', rug2: '#ece2c8' },
+  curio:   { floor: '#76583e', floor2: '#886a4c', wall: '#3a4a6a', wallTop: '#4e5e80', accent: '#84385a',
+    paper: '#3c4c6c', paper2: '#d8c48e', pattern: 'stars', trim: '#28304a', beam: '#2c2230', rug2: '#f0c83a' },
+  marlo:   { floor: '#a47e54', floor2: '#b69066', wall: '#a8c0d0', wallTop: '#c0d4e0', accent: '#b8483a',
+    paper: '#c4d6e0', paper2: '#a6bed0', pattern: 'stripes', trim: '#5e7e96', beam: '#46382a', rug2: '#f0ead8' },
 };
+
+// Blend two hex colors, and a shorthand that blends toward black (amt < 0) or a warm white
+// (amt > 0). For deriving tile tones.
+const rgbOf = (hex) => { const n = parseInt(hex.slice(1, 7), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+function mixHex(a, b, t) {
+  const B = rgbOf(b);
+  return '#' + rgbOf(a).map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, '0')).join('');
+}
+const shade = (hex, amt) => mixHex(hex, amt < 0 ? '#120c18' : '#fff4d8', Math.abs(amt));
 
 // ---------- painting ----------
 const atlases = {}; // theme -> { frames (default variant), variants: Array<[Map, Map]> }
@@ -95,6 +130,54 @@ function paintTile(g, id, frame, theme, variant = 0) {
     px(0, 11, '#1f243477', 16); px(0, 15, '#1f243499', 16);
     px(5, 7, '#1f243477', 1, 4); px(12, 12, '#1f243477', 1, 3);
     px(6, 7, th.wallTop, 5); px(1, 12, th.wallTop, 6);
+  };
+  // the village houses' coursed stone, shared by their doors and windows
+  const plaster = () => {
+    fill('#b09a78'); speckle(6, '#c0aa88');
+    px(0, 0, '#8a7a5e', 16, 1); px(0, 5, '#8a7a5e', 16, 1); px(0, 10, '#8a7a5e', 16, 1); px(0, 15, '#8a7a5e', 16, 1);
+    px(4, 1, '#8a7a5e', 1, 4); px(11, 6, '#8a7a5e', 1, 4); px(7, 11, '#8a7a5e', 1, 4);
+  };
+  // interiors: themes without house colors (the dungeons) borrow their masonry tones
+  const trim = th.trim || shade(th.wall, -0.3), beam = th.beam || shade(th.wall, -0.45);
+  const rug2 = th.rug2 || th.floor2;
+  const floorboards = () => {
+    const gap = shade(th.floor, -0.3);
+    fill(th.floor);
+    for (let y = 0; y < 16; y += 4) {
+      px(0, y, th.floor2, 16);                                  // lit top edge of each board
+      px(0, y + 3, gap, 16);                                    // the gap under it
+      px((y * 3 + variant * 5 + (y >> 2) * 7) % 16, y, gap, 1, 3);   // staggered butt joint
+    }
+    if (variant === 3) px(9, 5, gap, 2);                        // a knot
+  };
+  // Back-wall patterns run on the wall's own y (upper row 0-15, lower row 16-31) so they
+  // carry across the seam between the two rows; every period divides 16 so they tile sideways.
+  const wallpaper = (yOff, y0, y1) => {
+    const p = th.paper || th.wall, p2 = th.paper2 || th.wallTop;
+    px(0, y0, p, 16, y1 - y0);
+    for (let y = y0; y < y1; y++) {
+      const Y = y + yOff;
+      switch (th.pattern) {
+        case 'stripes': px(2, y, p2, 2); px(10, y, p2, 2); break;
+        case 'dots': if (Y % 6 === 1 || Y % 6 === 2) { const o = Math.floor(Y / 6) % 2 ? 5 : 1; px(o, y, p2, 2); px(o + 8, y, p2, 2); } break;
+        case 'planks': px(0, y, p2); px(8, y, p2); px(1, y, shade(p, 0.1)); px(9, y, shade(p, 0.1)); break;
+      }
+    }
+    if (th.pattern === 'stars') {
+      // little four-point stars, each drawn whole or not at all so none spill onto the trim
+      const dim = shade(p2, -0.45);
+      for (const [sx, sy] of [[4, 5], [12, 12]]) {
+        if (sy - 1 < y0 || sy + 1 >= y1) continue;
+        px(sx, sy, p2); px(sx - 1, sy, dim); px(sx + 1, sy, dim); px(sx, sy - 1, dim); px(sx, sy + 1, dim);
+      }
+    }
+    if (th.pattern === 'roots') {
+      // packed earth: pebbles and a wandering rootlet
+      for (let i = 0; i < 5; i++) px(Math.floor(r() * 15), y0 + Math.floor(r() * (y1 - y0 - 1)), p2, 2, 1);
+      px(1 + variant * 3, y0 + 2, shade(p, 0.18), 2, 1);
+      const rx = 3 + variant * 3;
+      px(rx, y0, shade(p2, -0.2), 1, Math.min(4, y1 - y0)); px(rx + 1, y0 + 3, shade(p2, -0.2), 1, 2);
+    }
   };
 
   switch (id) {
@@ -146,9 +229,7 @@ function paintTile(g, id, frame, theme, variant = 0) {
     case T.CLIFF: fill('#7a6a58'); px(0, 0, '#8a7a66', 16, 4); px(0, 4, '#6a5a48', 16, 1); speckle(6, '#5a4c3c'); px(0, 13, '#584a3a', 16, 3); break;
     case T.MESA: fill('#a8683a'); px(0, 0, '#c07a44', 16, 4); px(0, 4, '#8a5530', 16, 1); px(0, 8, '#985d34', 16, 1); speckle(5, '#7a4a28'); px(0, 13, '#6a4224', 16, 3); break;
     case T.FENCE: fill('#538564'); px(1, 4, '#8a6a3a', 2, 10); px(13, 4, '#8a6a3a', 2, 10); px(0, 6, '#a0764a', 16, 2); px(0, 10, '#a0764a', 16, 2); break;
-    case T.WALL: fill('#b09a78'); speckle(6, '#c0aa88');
-      px(0, 0, '#8a7a5e', 16, 1); px(0, 5, '#8a7a5e', 16, 1); px(0, 10, '#8a7a5e', 16, 1); px(0, 15, '#8a7a5e', 16, 1);
-      px(4, 1, '#8a7a5e', 1, 4); px(11, 6, '#8a7a5e', 1, 4); px(7, 11, '#8a7a5e', 1, 4); break;
+    case T.WALL: plaster(); break;
     case T.ROOF: fill('#9b574f');
       for (let y = 0; y < 16; y += 4) {
         px(0, y, '#bd7860', 16); px(0, y + 3, '#6c4148', 16);
@@ -211,6 +292,66 @@ function paintTile(g, id, frame, theme, variant = 0) {
       px(6, 4, frame ? '#ffc84a' : '#ff8a3a', 4, 4); px(7, 3, frame ? '#fff0a0' : '#ffc84a', 2, 2); break;
     case T.DDECOR: fill(th.floor); px(4, 4, th.accent + '44', 8, 8); px(6, 6, th.accent + '66', 4, 4); break;
     case T.GUST: fill(th.floor); px(frame ? 2 : 6, 4, '#c8d8e8', 6, 1); px(frame ? 8 : 3, 9, '#c8d8e8', 5, 1); px(frame ? 4 : 9, 13, '#c8d8e8', 4, 1); break;
+
+    // ---- house exteriors (set into the village's WALL rows) ----
+    case T.HDOOR: plaster();
+      px(3, 1, '#4a3222', 10, 15); px(4, 2, '#8a5a34', 8, 14);          // frame, door
+      px(4, 2, '#a4703e', 8, 1); px(7, 3, '#6e4628', 1, 13);             // lintel light, plank seam
+      px(10, 3, '#6e4628', 1, 13); px(5, 5, '#a4703e', 1, 8);
+      px(10, 9, '#f0c83a'); px(10, 10, '#a07818');                      // knob
+      px(2, 15, '#8a8070', 12, 1); break;                                // doorstep
+    case T.WINDOW: plaster();
+      px(3, 2, '#4a3222', 10, 9); px(4, 3, '#8ac4e0', 8, 7);             // frame, glass
+      px(4, 3, '#d4f0fa', 3, 2); px(4, 5, '#d4f0fa', 1, 2);              // shine
+      px(7, 3, '#4a3222', 2, 7); px(4, 6, '#4a3222', 8, 1);              // mullions
+      px(2, 11, '#8a5a34', 12, 3); px(2, 11, '#a4703e', 12, 1);          // flower box
+      for (let i = 0; i < 4; i++) px(3 + i * 3, 10, ['#e04a5a', '#ffe066', '#ff9ad0', '#f0f0f0'][(i + variant) % 4], 2, 1);
+      break;
+    case T.SHOPWALL: plaster();
+      px(7, 0, '#4a3222', 2, 3); px(2, 2, '#4a3222', 12, 1);             // bracket
+      px(3, 3, '#4a3222', 1, 2); px(12, 3, '#4a3222', 1, 2);             // chains
+      px(1, 5, '#5a3a18', 14, 9); px(2, 6, '#b07838', 12, 7);            // signboard
+      px(6, 7, '#815137', 4, 5); px(7, 7, '#f0c83a', 2, 5); px(6, 8, '#f0c83a', 4, 3);  // coin
+      px(7, 8, '#fff0b5', 1, 2); break;
+    case T.BUILDING: grass(); break;   // always under a building sprite
+
+    // ---- house interiors ----
+    case T.HFLOOR: floorboards(); break;
+    case T.HWALL_UP:
+      wallpaper(0, 4, 16);
+      px(0, 0, shade(trim, -0.35), 16, 1); px(0, 1, trim, 16, 2); px(0, 3, shade(trim, 0.3), 16, 1);
+      break;
+    case T.HWALL:
+      wallpaper(16, 0, 9);
+      px(0, 9, shade(trim, 0.3), 16, 1); px(0, 10, trim, 16, 4);        // wainscot rail and panel
+      px(3, 11, shade(trim, -0.25), 1, 2); px(11, 11, shade(trim, -0.25), 1, 2);
+      px(0, 14, shade(trim, -0.3), 16, 2); break;                        // baseboard
+    case T.HWIN:
+      wallpaper(0, 4, 16);
+      px(0, 0, shade(trim, -0.35), 16, 1); px(0, 1, trim, 16, 2); px(0, 3, shade(trim, 0.3), 16, 1);
+      px(3, 4, shade(trim, -0.35), 10, 11); px(4, 5, '#8ac4e0', 8, 8);   // frame, glass
+      px(4, 5, '#d4f0fa', 3, 2); px(4, 7, '#d4f0fa', 1, 2);              // shine
+      px(7, 5, trim, 2, 8); px(4, 8, trim, 8, 1);                        // mullions
+      px(1, 4, th.accent, 2, 10); px(13, 4, th.accent, 2, 10);           // curtains
+      px(1, 4, shade(th.accent, 0.3), 1, 10); px(14, 4, shade(th.accent, -0.25), 1, 10);
+      px(2, 14, shade(trim, 0.3), 12, 2); break;                         // sill
+    case T.HBEAM: fill(beam);
+      px(2 + variant, 4, shade(beam, 0.14), 5); px(9 - variant, 11, shade(beam, 0.14), 4);
+      px(6, 8 + (variant & 1), shade(beam, -0.25), 3); break;
+    case T.RUG: {
+      // a small, quiet woven diamond (the border is drawn per-edge in drawTileTo)
+      const motif = mixHex(th.accent, rug2, 0.35), weave = shade(th.accent, -0.12);
+      fill(th.accent);
+      for (let y = 1; y < 16; y += 3) px(0, y, weave, 16, 1);
+      px(7, 5, motif, 2, 1); px(6, 6, motif, 1, 1); px(9, 6, motif, 1, 1); px(5, 7, motif, 1, 2); px(10, 7, motif, 1, 2);
+      px(6, 9, motif, 1, 1); px(9, 9, motif, 1, 1); px(7, 10, motif, 2, 1);
+      break;
+    }
+    case T.EXIT: floorboards();
+      px(0, 0, beam, 1, 16); px(15, 0, beam, 1, 16);                     // door jambs
+      px(2, 2, '#4a3222', 12, 12); px(3, 3, '#a8844c', 10, 10);          // coir mat
+      px(3, 5, '#8e6c3a', 10, 1); px(3, 10, '#8e6c3a', 10, 1);
+      px(6, 6, '#f0e2b8', 4, 1); px(7, 7, '#f0e2b8', 2, 1); break;       // "this way out" chevron
     default: fill('#ff00ff');
   }
 }
@@ -245,8 +386,48 @@ export function drawTileTo(ctx, theme, id, x, y, time, neighbors = null) {
   const variant = ((tx * 73856093) ^ (ty * 19349663) ^ ((tx + ty) * 83492791)) >>> 0;
   const c = atlas.variants[(variant >>> 8) % 4][f].get(id);
   if (c) ctx.drawImage(c, x, y);
-  if (neighbors) drawBanks(ctx, id, x, y, neighbors);
+  if (neighbors) {
+    drawBanks(ctx, id, x, y, neighbors);
+    drawInteriorEdges(ctx, theme, id, x, y, neighbors);
+  }
+}
 
+// Interior depth, drawn inside the tile like the banks: floor in the lee of a wall takes a
+// soft shadow, wall tops get a lit lip where they meet the floor, and a rug is bound with a
+// border (and fringe at its ends) wherever it stops.
+const WALLISH = new Set([T.HWALL, T.HWALL_UP, T.HWIN, T.HBEAM]);
+const FLOORISH = new Set([T.HFLOOR, T.RUG, T.EXIT]);
+function drawInteriorEdges(ctx, theme, id, x, y, [n, e, s, w]) {
+  if (id === T.HFLOOR || id === T.RUG) {
+    ctx.fillStyle = '#10081844';
+    if (WALLISH.has(n)) ctx.fillRect(x, y, 16, 3);
+    if (WALLISH.has(w)) ctx.fillRect(x, y, 2, 16);
+    if (WALLISH.has(e)) ctx.fillRect(x + 15, y, 1, 16);
+  }
+  if (id === T.HBEAM) {
+    ctx.fillStyle = '#ffffff1c';
+    if (FLOORISH.has(e)) ctx.fillRect(x + 14, y, 2, 16);
+    if (FLOORISH.has(w)) ctx.fillRect(x, y, 2, 16);
+    if (FLOORISH.has(n)) ctx.fillRect(x, y, 16, 2);
+  }
+  if (id === T.RUG) {
+    const th = THEMES[theme] || THEMES.ow;
+    const edge = th.rug2 || th.floor2, dark = shade(th.accent, -0.4);
+    const sides = [n !== T.RUG, e !== T.RUG, s !== T.RUG, w !== T.RUG];
+    ctx.fillStyle = dark;
+    if (sides[0]) ctx.fillRect(x, y, 16, 1);
+    if (sides[1]) ctx.fillRect(x + 15, y, 1, 16);
+    if (sides[2]) ctx.fillRect(x, y + 15, 16, 1);
+    if (sides[3]) ctx.fillRect(x, y, 1, 16);
+    ctx.fillStyle = edge;
+    if (sides[0]) ctx.fillRect(x + (sides[3] ? 1 : 0), y + 1, 16 - (sides[3] ? 1 : 0) - (sides[1] ? 1 : 0), 2);
+    if (sides[2]) ctx.fillRect(x + (sides[3] ? 1 : 0), y + 13, 16 - (sides[3] ? 1 : 0) - (sides[1] ? 1 : 0), 2);
+    if (sides[1]) ctx.fillRect(x + 13, y + 1, 2, 14);
+    if (sides[3]) ctx.fillRect(x + 1, y + 1, 2, 14);
+    // tassels off the short ends
+    if (sides[0]) for (let i = 2; i < 15; i += 3) ctx.fillRect(x + i, y, 1, 1);
+    if (sides[2]) for (let i = 2; i < 15; i += 3) ctx.fillRect(x + i, y + 15, 1, 1);
+  }
 }
 
 export const isSolid = (id) => !!(P[id] && P[id].solid);

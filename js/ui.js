@@ -1,7 +1,7 @@
 // HUD, title screen, dialogs, shop, shrine, map, pause, banners, death, credits.
 import { VIEW_W, VIEW_H, ARROW_TYPES, ARROWS, UPGRADE_TRACKS, CONSUMABLES, MAX_LEVEL,
   ARROW_UP_BASE, ARROW_UP_STEP, ARROW_UP_DESC, VESSEL_COSTS, REGION_NAMES, TELEPORT, SPRINT, SIDE_QUESTS,
-  GOD_SWORD_LV, PUGGLE_TOTAL } from './config.js';
+  GOD_SWORD_LV, PUGGLE_TOTAL, KEEPSAKE_TOTAL } from './config.js';
 import { clamp } from './util.js';
 import { drawSprite } from './pixelart.js';
 import { drawText, textWidth } from './font.js';
@@ -514,7 +514,7 @@ function tileMapColor(id) {
   else if ([T.PINE, T.DARKGRASS, T.MUD, T.CRYSTAL, T.THORNS].includes(id)) c = '#2c5824';
   else if ([T.CLIFF, T.ROCK, T.MESA].includes(id)) c = '#7a6a58';
   else if ([T.STORMGRASS, T.STORMROCK, T.DEADTREE].includes(id)) c = '#3c5244';
-  else if ([T.FENCE, T.WALL, T.ROOF].includes(id)) c = '#a8503a';
+  else if ([T.FENCE, T.WALL, T.ROOF, T.HDOOR, T.WINDOW, T.SHOPWALL, T.BUILDING].includes(id)) c = '#a8503a';
   MAP_COLORS[id] = c;
   return c;
 }
@@ -534,7 +534,9 @@ export function buildMinimap(area) {
 
 export function drawMap(g, ctx) {
   panel(ctx, 8, 8, VIEW_W - 16, VIEW_H - 16, 0.94);
-  if (g.area.type === 'overworld' && g.minimap) {
+  // indoors, the map is still the Vale, with Gus's dot on the front door he came in by
+  const ow = g.area.type === 'overworld' ? g.area : g.area.type === 'house' ? g.overworldRef() : null;
+  if (ow && g.minimap) {
     const mx = 24, my = 28, scale = 1.85;
     text(ctx, 'BILLABONG VALE', mx + 92, 14, { size: 9, align: 'center', color: '#f0c83a' });
     ctx.save();
@@ -559,7 +561,7 @@ export function drawMap(g, ctx) {
     }
     // side quest givers: pink until turned in, then fade to the same grey as cleared dungeons.
     // (trinkets carry a `quest` field too, but showing their location would spoil the fetch.)
-    for (const p of g.area.props || []) {
+    for (const p of ow.props) {
       if (!p.quest || p.kind === 'trinket') continue;
       const [px, py] = pt(p.tx, p.ty);
       ctx.fillStyle = g.questState(p.quest) === 'done' ? '#8a8278' : '#ff8ad0';
@@ -567,15 +569,18 @@ export function drawMap(g, ctx) {
       ctx.strokeStyle = '#101418';
       ctx.strokeRect(px - 2.5, py - 2.5, 6, 6);
     }
-    // puggles already found get a small dot, so the blank stretches show where to look next
-    ctx.fillStyle = '#f2d29c';
-    for (const p of g.area.props || []) {
-      if (p.kind !== 'puggle' || !g.state.puggles[p.id]) continue;
+    // puggles and keepsakes already found get a small dot, so the blank stretches show
+    // where to look next
+    for (const p of ow.props) {
+      const found = p.kind === 'puggle' ? g.state.puggles[p.id] : p.kind === 'keepsake' ? g.state.keepsakes[p.id] : false;
+      if (!found) continue;
       const [px, py] = pt(p.tx, p.ty);
+      ctx.fillStyle = p.kind === 'puggle' ? '#f2d29c' : '#ffd84a';
       ctx.fillRect(Math.round(px) - 1, Math.round(py) - 1, 2, 2);
     }
     if (Math.floor(g.time * 3) % 2 === 0) {
-      const [px, py] = pt(g.player.cx / 16, g.player.cy / 16);
+      const [px, py] = g.area.type === 'house' ? pt(g.area.door[0] + 0.5, g.area.door[1] + 1)
+        : pt(g.player.cx / 16, g.player.cy / 16);
       ctx.fillStyle = '#fff';
       ctx.fillRect(px - 1.5, py - 1.5, 4, 4);
     }
@@ -590,16 +595,19 @@ export function drawMap(g, ctx) {
     q.forEach(([label, done], i) => {
       text(ctx, (done ? '[x] ' : '[ ] ') + label, lx, 44 + i * 12, { size: 7, color: done ? '#8a8278' : '#f0ead8' });
     });
-    text(ctx, 'SIDE QUESTS', lx, 124, { size: 8, color: '#ff8ad0' });
+    text(ctx, 'SIDE QUESTS', lx, 122, { size: 8, color: '#ff8ad0' });
     Object.values(SIDE_QUESTS).forEach((sq, i) => {
       const s = g.questState(sq.id);
       const suffix = s === 'ready' ? ' - ready!' : '';
-      text(ctx, (s === 'done' ? '[x] ' : '[ ] ') + sq.name + suffix, lx, 138 + i * 12,
+      text(ctx, (s === 'done' ? '[x] ' : '[ ] ') + sq.name + suffix, lx, 135 + i * 11,
         { size: 7, color: s === 'done' ? '#8a8278' : s === 'ready' ? '#ffd23a' : '#f0ead8' });
     });
     const pugs = g.puggleCount(), allPugs = pugs >= PUGGLE_TOTAL;
-    drawSprite(ctx, 'puggle', lx + 5, 208);
-    text(ctx, `PUGGLES  ${pugs} / ${PUGGLE_TOTAL}`, lx + 13, 200, { size: 8, color: allPugs ? '#ffd84a' : '#f2d29c' });
+    drawSprite(ctx, 'puggle', lx + 5, 199);
+    text(ctx, `PUGGLES  ${pugs} / ${PUGGLE_TOTAL}`, lx + 13, 191, { size: 8, color: allPugs ? '#ffd84a' : '#f2d29c' });
+    const keeps = g.keepsakeCount(), allKeeps = keeps >= KEEPSAKE_TOTAL;
+    drawSprite(ctx, 'ks_trophy', lx + 5, 212);
+    text(ctx, `KEEPSAKES  ${keeps} / ${KEEPSAKE_TOTAL}`, lx + 13, 204, { size: 8, color: allKeeps ? '#ffd84a' : '#f0d890' });
   } else if (g.area.isArena) {
     text(ctx, 'THE CRUCIBLE', VIEW_W / 2, 20, { size: 12, align: 'center', color: '#f0c83a' });
     const A = g.arena || { wave: 0 };
@@ -901,6 +909,16 @@ export function drawBanner(g, ctx) {
   ctx.restore();
   text(ctx, b.title, VIEW_W / 2, VIEW_H / 2 - 24, { size: 14, align: 'center', color: b.color || '#f0c83a', alpha: a });
   if (b.sub) text(ctx, b.sub, VIEW_W / 2, VIEW_H / 2 + 2, { size: 8, align: 'center', alpha: a });
+  // a found keepsake shows off beside its name, twice size
+  if (b.icon) {
+    const x = Math.round(VIEW_W / 2 - textWidth(b.title, 2) / 2 - 16);
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.translate(x, VIEW_H / 2 - 9 + Math.round(Math.sin(g.time * 3)));
+    ctx.scale(2, 2);
+    drawSprite(ctx, b.icon, 0, 0);
+    ctx.restore();
+  }
 }
 
 export function drawDead(g, ctx) {

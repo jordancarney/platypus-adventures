@@ -28,7 +28,7 @@ export const KEYMAP = {
   Digit1: 'slot1', Digit2: 'slot2', Digit3: 'slot3',
   Digit4: 'slot4', Digit5: 'slot5', Digit6: 'slot6',
   // debug (only honored with ?debug=1)
-  F1: 'dbgGear', F2: 'dbgWarp', F3: 'dbgHeal', F4: 'dbgRich', F5: 'dbgPuggles', KeyG: 'dbgGod',
+  F1: 'dbgGear', F2: 'dbgWarp', F3: 'dbgHeal', F4: 'dbgRich', F5: 'dbgPuggles', F6: 'dbgKeepsakes', KeyG: 'dbgGod',
 };
 
 // --- player balance ---
@@ -275,5 +275,77 @@ export const SIDE_QUESTS = {
 // Puggles: baby platypuses hidden across the overworld (placed in worldgen.js). Finding
 // every one earns the God Sword. The count here must match what worldgen places.
 export const PUGGLE_TOTAL = 50;
+
+// Keepsakes: one-of-a-kind curios hidden around the Vale (placed in worldgen.js), each shown
+// off on its own stand in Gus's Burrow once found. The id is a save key: never rename one.
+// `region` feeds Tully's hints; `how` is how it's hidden, for his clues and the design doc.
+// Two aren't in the world at all: the trophy is won in the Crucible and Mama Pearl gives
+// the drawing once enough puggles are home.
+export const KEEPSAKES = [
+  { id: 'ks_lure', name: 'Lucky Fishing Lure', sprite: 'ks_lure', region: 'village',
+    desc: "Dad's lucky lure! Bright red feathers, a little chewed. Every fish in the Vale knew this one.",
+    hint: "Your dad's old fishing lure snagged in the reeds of the village pond, just outside the west fence. Try cutting through the reeds." },
+  { id: 'ks_stone', name: 'Wishing Stone', sprite: 'ks_stone', region: 'marsh',
+    desc: 'A smooth river stone with a hole worn right through it. Peek through the hole and make a wish!',
+    hint: 'A wishing stone is hiding in a patch of tall grass, out west of the village in Willow Marsh.' },
+  { id: 'ks_boomerang', name: 'Old Boomerang', sprite: 'ks_boomerang', region: 'marsh',
+    desc: 'Carved from river red gum and painted with dots. Throw it and it always comes back -- unlike Gus\'s socks.',
+    hint: 'Somebody threw a boomerang so far it never came back! It landed in a ring of trees at the far west edge of the marsh.' },
+  { id: 'ks_bottle', name: 'Message in a Bottle', sprite: 'ks_bottle', region: 'marsh',
+    desc: "The note inside says: 'Whoever finds this -- be brave, be kind, and eat more crayfish.'",
+    hint: "A bottle is bobbing in the big river east of the village, just upstream of the bridge. You'll have to swim for it." },
+  { id: 'ks_egg', name: 'Ember Egg', sprite: 'ks_egg', region: 'fire',
+    desc: "A speckled egg that's still warm after all these years. Will it ever hatch? Nobody knows!",
+    hint: 'An ember egg sits in a nook of black basalt near the far east edge of the Cinderscale Wastes.' },
+  { id: 'ks_opal', name: 'Fire Opal', sprite: 'ks_opal', region: 'fire',
+    desc: 'It flickers with every color of a campfire. Opals are the rarest gems in all of Billabong Vale.',
+    hint: 'A fire opal is sealed inside a ring of cracked rock, way up at the north edge of the Cinderscale Wastes. Bring a bomb arrow!' },
+  { id: 'ks_arrowhead', name: 'Obsidian Arrowhead', sprite: 'ks_arrowhead', region: 'fire',
+    desc: 'Glassy black and still razor sharp, chipped out by a River Guardian long, long ago.',
+    hint: 'An old arrowhead is buried under a cracked boulder in the south of the Cinderscale Wastes. A bomb arrow would crack it.' },
+  { id: 'ks_pearl', name: 'Moon Pearl', sprite: 'ks_pearl', region: 'water',
+    desc: "A pink pearl as big as Gus's eye, from a lagoon clam that was VERY sleepy.",
+    hint: "There's a pearl on a tiny island out in Mistfall Lagoon, just one palm tree for company. Swim out north of the Grotto." },
+  { id: 'ks_seaglass', name: 'Sea Glass', sprite: 'ks_seaglass', region: 'water',
+    desc: 'Frosty green and blue glass, tumbled smooth by a hundred years of waves.',
+    hint: 'Sea glass washed up in a little grove of palms on the east beach of Mistfall Lagoon.' },
+  { id: 'ks_compass', name: 'Brass Compass', sprite: 'ks_compass', region: 'water',
+    desc: 'Its needle always points toward home. Very handy for a Guardian who loves to wander.',
+    hint: 'A compass is hidden on the northeast beach of the lagoon -- push the old stone onto its mark and it will turn up.' },
+  { id: 'ks_kite', name: 'Red Kite', sprite: 'ks_kite', region: 'air',
+    desc: "Snagged on the bluffs by a gust. The string is long gone, but it still wants to fly.",
+    hint: 'A red kite is caught in a pocket of mesa rock on the south side of the Skyreach Bluffs.' },
+  { id: 'ks_meteor', name: 'Star Stone', sprite: 'ks_meteor', region: 'air',
+    desc: 'A lump of iron that fell out of the sky. At night it hums, very quietly, to itself.',
+    hint: 'A star fell on the Skyreach Bluffs, near the west edge, and got sealed in by cracked rock. Bring a bomb arrow!' },
+  { id: 'ks_feather', name: 'Golden Feather', sprite: 'ks_feather', region: 'air',
+    desc: 'Dropped by a storm eagle. It shimmers like the sunrise over the bluffs.',
+    hint: 'A golden feather is guarded by a nest of talons and an owl, down on the south bluffs. Clear them out and it will be yours.' },
+  { id: 'ks_mushroom', name: 'Glow Mushroom', sprite: 'ks_mushroom', region: 'earth',
+    desc: 'It glows a soft green in the dark. The perfect night light for a cozy burrow.',
+    hint: 'A glow mushroom is growing in tall grass near the far west edge of Rootdeep Forest.' },
+  { id: 'ks_amber', name: 'Amber Drop', sprite: 'ks_amber', region: 'earth',
+    desc: 'Golden tree sap that hardened ages ago -- with a teeny ancient beetle still inside!',
+    hint: 'A drop of amber is locked inside a crystal deep in the south of Rootdeep Forest. A big BOOM would free it.' },
+  { id: 'ks_fossil', name: 'Spiral Fossil', sprite: 'ks_fossil', region: 'earth',
+    desc: 'The swirly shell of a sea creature from back when the whole Vale was ocean.',
+    hint: 'A fossil is tucked into a nook of pine trees in the southeast of Rootdeep Forest.' },
+  { id: 'ks_coin', name: 'Ancient Guardian Coin', sprite: 'ks_coin', region: 'confluence',
+    desc: 'Stamped with a platypus wearing a crown. Worth more than every Platycoin in the Vale put together.',
+    hint: 'An ancient coin fell into a thorn patch in the northeast of the Confluence. Ouch! Mind the prickles.' },
+  { id: 'ks_thunder', name: 'Thunder Egg', sprite: 'ks_thunder', region: 'confluence',
+    desc: 'A plain gray rock on the outside, and full of sparkly purple crystals on the inside.',
+    hint: 'A thunder egg is under a cracked boulder just inside the Great Gate, off to the east.' },
+  { id: 'ks_trophy', name: 'Crucible Trophy', sprite: 'ks_trophy', region: 'arena',
+    desc: 'For surviving ten whole waves in the Crucible. Gus polishes it every single morning.',
+    hint: 'The Crucible gives a shiny trophy to anyone who clears ten waves. Good luck!' },
+  { id: 'ks_drawing', name: 'Puggle Drawing', sprite: 'ks_drawing', region: 'mama',
+    desc: 'A crayon picture from the puggles: Gus, very big, with a VERY big sword. Signed with lots of tiny footprints.',
+    hint: "Mama Pearl's puggles are drawing Gus a picture. I hear they'll give it to him once 25 of them are home." },
+];
+export const KEEPSAKE_TOTAL = KEEPSAKES.length;
+export const KEEPSAKE_BY_ID = Object.fromEntries(KEEPSAKES.map(k => [k.id, k]));
+export const KEEPSAKE_ARENA_WAVE = 10;     // clearing this wave in the Crucible wins the trophy
+export const KEEPSAKE_PUGGLES = 25;        // puggles home before Mama hands over the drawing
 
 export const DEBUG = new URLSearchParams(location.search).has('debug');

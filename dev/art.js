@@ -1,6 +1,7 @@
 // Isolated visual workshop: no game loop, audio, save reads or save writes.
 import { buildSprites, sprites, drawSprite, frameName } from '../js/pixelart.js';
 import { T, THEMES, buildTileAtlas, drawTileTo } from '../js/tiles.js';
+import { KEEPSAKES } from '../js/config.js';
 
 buildSprites();
 const cards = [];
@@ -17,6 +18,12 @@ for (let n = 1; n <= 6; n++) card('hero', 'gus_idle', n);
 for (const prefix of ['sword', 'bow', 'shield']) for (let n = 1; n <= 6; n++) card('items', prefix + n);
 card('items', 'sword7');   // the God Sword
 ['coin', 'diamond', 'chest', 'chest_open', 'pot', 'bomb', 'key', 'crayfish', 'arrow_regular', 'arrow_fire', 'arrow_ice', 'arrow_lightning', 'arrow_bomb', 'arrow_light', 'statue', 'elder', 'wombat', 'dolphin', 'mama', 'puggle', 'puggle_cream', 'puggle_choc'].forEach(n => card('items', n));
+KEEPSAKES.forEach(k => card('keepsakes', k.sprite));
+['burrow_ext', 'cottage_ext', 'tully', 'dot', 'bed', 'bunkbed', 'crib', 'fireplace', 'stove', 'bookshelf', 'cabinet', 'pebbleshelf',
+  'table', 'lowtable', 'counter', 'stool', 'armchair', 'rocker', 'plant', 'basket', 'rod', 'toybox', 'barrel', 'applebarrel', 'crate',
+  'tank', 'armorstand', 'fishbowl', 'telescope', 'books', 'ringbox', 'ringbox_full', 'pedestal', 'emptycard', 'portrait', 'portrait2',
+  'puggleportrait', 'kidart', 'clock', 'lamp', 'plaque', 'swordrack', 'heightchart', 'growthchart', 'mountedfish', 'net', 'crochead',
+  'jarshelf', 'weaponrack', 'valemap'].forEach(n => card('houses', n));
 const vale = document.getElementById('vale').getContext('2d');
 const dungeon = document.getElementById('dungeon').getContext('2d');
 const atlasCtx = document.getElementById('tiles').getContext('2d');
@@ -61,7 +68,7 @@ function render(ms) {
   drawSprite(dungeon, 'gus_idle', 90, 88); drawSprite(dungeon, 'armor3', 90, 88);
   drawSprite(dungeon, 'shield3', 99, 85); drawSprite(dungeon, frameName('gknight', t * 5), 134, 65, { flip: true });
   drawSprite(dungeon, 'pot', 30, 55); drawSprite(dungeon, 'chest', 135, 115);
-  atlasCtx.clearRect(0, 0, 512, 128); atlasCtx.imageSmoothingEnabled = false;
+  atlasCtx.clearRect(0, 0, 512, 160); atlasCtx.imageSmoothingEnabled = false;
   Object.values(T).forEach((id, i) => {
     const x = (i % 16) * 32, y = Math.floor(i / 16) * 40;
     atlasCtx.save(); atlasCtx.translate(x, y); atlasCtx.scale(2, 2);

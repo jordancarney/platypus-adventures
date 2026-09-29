@@ -13,6 +13,7 @@
 //     with a blue coat gets a navy outline rather than the base animal's brown one.
 
 import { SWORD_LOOK, ARROWS } from './config.js';
+import { HOUSE_DEFS, buildHouseSprites } from './houseart.js';
 
 const DEFS = {};
 
@@ -1134,7 +1135,10 @@ const VARIANTS = {
   // puggle coats
   puggle_cream: { base: 'puggle', colors: { b: '#d6a878', l: '#fff0cc', t: '#a07a6a' } },
   puggle_choc:  { base: 'puggle', colors: { b: '#7a4a30', l: '#e0b080', t: '#5a3a40' } },
+  // Dot, Pip's little sister: a lighter coat and a pink scarf
+  dot: { base: 'villager', colors: { b: '#c48a5a', l: '#f2d4a8', m: '#e27aa4' } },
 };
+Object.assign(DEFS, HOUSE_DEFS);
 
 // ---------- build ----------
 export const sprites = {}; // name -> {canvas, w, h}
@@ -1202,6 +1206,7 @@ export function buildSprites() {
     if (base.map2) sprites[name + '_2'] = renderMap(base.map2, colors, v.scale || 1, base.shade);
   }
   sprites.gate = buildGateSprite();
+  buildHouseSprites(sprites);
 }
 
 // Two-frame animation. A def's optional `map2` (a second pose on the same grid: the other

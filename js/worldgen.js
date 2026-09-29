@@ -2,6 +2,7 @@
 import { WORLD_W as W, WORLD_H as H, WORLD_SEED, TILE } from './config.js';
 import { rng, irand, choose, clamp, dist } from './util.js';
 import { T, isSolid, props } from './tiles.js';
+import { HOUSES } from './houses.js';
 
 export const REGION = { MARSH: 0, FIRE: 1, WATER: 2, AIR: 3, EARTH: 4, CONFLUENCE: 5, VILLAGE: 6 };
 export const REGION_KEYS = ['marsh', 'fire', 'water', 'air', 'earth', 'confluence', 'village'];
@@ -181,11 +182,14 @@ export function buildOverworld() {
     if (Math.abs(y - 110) > 1) { set(90, y, T.FENCE); set(110, y, T.FENCE); }
     else { set(90, y, T.PATH); set(110, y, T.PATH); }
   }
-  // houses (roof top rows + wall bottom rows)
-  const house = (hx, hy) => {
+  // houses (roof top rows + wall bottom rows). Each front wall gets a window at either end
+  // and a door wherever houses.js says that house's door is; the shop hangs its signboard.
+  const house = (hx, hy, id, shop = false) => {
     for (let x = hx; x < hx + 4; x++) { set(x, hy, T.ROOF); set(x, hy + 1, T.ROOF); set(x, hy + 2, T.WALL); }
+    set(hx, hy + 2, shop ? T.SHOPWALL : T.WINDOW); set(hx + 3, hy + 2, T.WINDOW);
+    set(...HOUSES[id].door, T.HDOOR);
   };
-  house(92, 104); house(105, 104); house(92, 113); house(104, 113);
+  house(92, 104, 'pip'); house(105, 104, 'shop', true); house(92, 113, 'tully'); house(104, 113, 'marlo');
 
   // --- The Crucible: a stone colosseum a short walk out the east gate ---
   {
@@ -260,7 +264,12 @@ export function buildOverworld() {
     { kind: 'sign', tx: 102, ty: 120, text: 'Billabong Village.|All are welcome (predators excepted).' },
     { kind: 'statue', tx: 100, ty: 108, id: 'statue' },
     { kind: 'npc', tx: 97, ty: 108, sprite: 'elder', name: 'Elder Mirri', dialog: 'elder' },
-    { kind: 'npc', tx: 104, ty: 107, sprite: 'wombat', name: 'Wombeau', dialog: 'shop' },
+    // Wombeau keeps shop indoors now (houses.js); his board stands where he used to
+    { kind: 'sign', tx: 104, ty: 107, text: "WOMBEAU'S TRADING POST.|Upgrades, arrows and snacks. Come on in!" },
+    { kind: 'sign', tx: 91, ty: 107, text: "PIP & DOT'S HOUSE.|Please knock. Dot will answer. Dot answers EVERYTHING." },
+    { kind: 'sign', tx: 96, ty: 116, text: "TULLY'S CURIO HUT.|Curious things and curiouser stories." },
+    { kind: 'sign', tx: 108, ty: 116, text: "MARLO'S HOUSE.|Gone fishing. (Not really. Come in!)" },
+    ...['pip', 'shop', 'tully', 'marlo'].map(id => ({ kind: 'house', id, tx: HOUSES[id].door[0], ty: HOUSES[id].door[1] })),
     // Keep landmarks out of the house footprints (x92-95 / x104-108 at y104-106 and y113-115).
     // Sprites are bottom-anchored, so a roof on the tile *below* visually swallows them.
     { kind: 'shrine', tx: 97, ty: 112 },
@@ -503,21 +512,23 @@ export function buildOverworld() {
     return best;
   };
 
+  // The hiding-spot shapes below take an optional `put` for what gets hidden -- a puggle by
+  // default, or a keepsake (see the end of this section).
   // plain sight, if you go looking: a pocket of `wall` open on one side
-  const nook = (n, cx, cy, [ox, oy], wall, floor = null) => {
+  const nook = (n, cx, cy, [ox, oy], wall, floor = null, put = puggle) => {
     clearAround(cx, cy, 2.5);
     for (const [dx, dy] of RING8) if (!((ox && dx === ox) || (oy && dy === oy))) set(cx + dx, cy + dy, wall);
     if (floor !== null) set(cx, cy, floor);
-    puggle(n, cx, cy);
+    put(n, cx, cy);
   };
   const glade = (n, cx, cy) => { clearAround(cx, cy, 1.5); puggle(n, cx, cy); };
   // under a lone tuft of tall grass -- the odd one out wherever grass doesn't grow
-  const tuft = (n, x, y) => { set(x, y, T.TALLGRASS); puggle(n, x, y); };
+  const tuft = (n, x, y, put = puggle) => { set(x, y, T.TALLGRASS); put(n, x, y); };
   // under one tuft of a whole patch
-  const patch = (n, cx, cy, [px, py]) => {
+  const patch = (n, cx, cy, [px, py], put = puggle) => {
     clearAround(cx, cy, 2.2);
     disc(cx, cy, 2.2, (x, y) => { if (openGround(x, y)) set(x, y, T.TALLGRASS); });
-    tuft(n, cx + px, cy + py);
+    tuft(n, cx + px, cy + py, put);
   };
   // a ring of flowers around a single tuft
   const flowerRing = (n, cx, cy) => {
@@ -527,27 +538,27 @@ export function buildOverworld() {
     tuft(n, cx, cy);
   };
   // among the reeds at a pond's edge
-  const reeds = (n, nx, ny) => {
+  const reeds = (n, nx, ny, put = puggle) => {
     const at = nearest(nx, ny, t => t === T.SHALLOW || t === T.REED);
     if (!at) return;
     set(at[0], at[1], T.REED);
-    puggle(n, at[0], at[1]);
+    put(n, at[0], at[1]);
   };
   // curled up under a cracked boulder or a crystal -- a bomb arrow's job
-  const boulder = (n, x, y, rock = T.CRACKROCK) => { clearAround(x, y, 1.5); set(x, y, rock); puggle(n, x, y); };
+  const boulder = (n, x, y, rock = T.CRACKROCK, put = puggle) => { clearAround(x, y, 1.5); set(x, y, rock); put(n, x, y); };
   // in plain view but sealed in by cracked rock
-  const walled = (n, cx, cy) => {
+  const walled = (n, cx, cy, put = puggle) => {
     clearAround(cx, cy, 2.6);
     for (const [dx, dy] of RING8) set(cx + dx, cy + dy, T.CRACKROCK);
-    puggle(n, cx, cy);
+    put(n, cx, cy);
   };
   // paddling in deep water, snapped to a genuine deep tile (water edges are noisy)
-  const swimmer = (n, nx, ny) => { const at = nearest(nx, ny, t => t === T.DEEP); if (at) puggle(n, at[0], at[1]); };
+  const swimmer = (n, nx, ny, put = puggle) => { const at = nearest(nx, ny, t => t === T.DEEP); if (at) put(n, at[0], at[1]); };
   // a speck of island out in deep water, one palm for shade
-  const islet = (n, cx, cy) => {
+  const islet = (n, cx, cy, put = puggle) => {
     disc(cx, cy, 1.2, (x, y) => set(x, y, T.SAND));
     set(cx + 1, cy - 1, T.PALM);
-    puggle(n, cx, cy);
+    put(n, cx, cy);
   };
 
   // --- puzzle puggles: each is a `puzzles` entry with a `puggle` field instead of doors,
@@ -558,14 +569,14 @@ export function buildOverworld() {
     puggle(n, pop[0], pop[1], { puzzle: id });
   };
   // push the stone(s) into the hollow(s)
-  const stones = (n, pairs, pop, [cx, cy, rad]) => {
+  const stones = (n, pairs, pop, [cx, cy, rad], pz = puzzlePuggle) => {
     clearAround(cx, cy, rad);
     const plates = [], blocks = [];
     for (const [[px, py], [bx, by]] of pairs) {
       set(px, py, T.PLATE); plates.push([px, py]);
       propList.push({ kind: 'block', tx: bx, ty: by }); blocks.push([bx, by]);
     }
-    puzzlePuggle(n, pop, { kind: 'blocks', plates, blocks });
+    pz(n, pop, { kind: 'blocks', plates, blocks });
   };
   // strike the eye(s) with an arrow or a sword beam; more than one must all be lit in time
   const eyes = (n, list, pop, limit, [cx, cy, rad]) => {
@@ -576,11 +587,10 @@ export function buildOverworld() {
       : { kind: 'sequence', eyes: list, order: [0], step: 0 });
   };
   // a pack of predators standing guard; clear them and the puggle comes out
-  const nest = (n, [tx, ty], types) => {
+  const nest = (n, [tx, ty], types, pz = puzzlePuggle, armToast = 'Predators are guarding a puggle!') => {
     clearAround(tx, ty, 4);
     const spawns = [[-3, -2], [3, -2], [0, 3], [-3, 2], [3, 2]].slice(0, types.length).map(([dx, dy]) => [tx + dx, ty + dy]);
-    puzzlePuggle(n, [tx, ty], { kind: 'killall', trigger: [tx, ty], spawns, types, armed: false,
-      armToast: 'Predators are guarding a puggle!' });
+    pz(n, [tx, ty], { kind: 'killall', trigger: [tx, ty], spawns, types, armed: false, armToast });
   };
   // a dash: step on the plate, then reach the glowing ring before time runs out
   const race = (n, start, goal, limit, sign) => {
@@ -593,13 +603,13 @@ export function buildOverworld() {
     puzzlePuggle(n, goal, { kind: 'race', start, goal, limit });
   };
 
-  // Mama Pearl's meadow, just outside the village's south gate on the burrow road: every
-  // puggle found comes home to play here, so it's cleared and roomy enough for all fifty.
+  // Mama Pearl's meadow, just outside the village's south gate on the burrow road. Her
+  // cottage (stamped at the end of this section) sits in it, and every puggle found comes
+  // home to play inside.
   const MEADOW = [95, 122];
   clearAround(...MEADOW, 4.5);
   disc(...MEADOW, 4.5, (x, y) => { if (openGround(x, y)) set(x, y, (x * 7 + y * 3) % 5 === 0 ? T.FLOWER : T.GRASS); });
-  propList.push({ kind: 'npc', tx: MEADOW[0], ty: MEADOW[1] - 1, sprite: 'mama', name: 'Mama Pearl', dialog: 'mama' });
-  propList.push({ kind: 'sign', tx: 99, ty: 124, text: "PUGGLE MEADOW.|Mama Pearl's little ones play here. Mind your step!" });
+  propList.push({ kind: 'sign', tx: 99, ty: 124, text: "PUGGLE MEADOW.|Mama Pearl's cottage. Every puggle Gus finds comes home to play inside!" });
 
   // Village and the burrow: three easy ones to learn the ropes
   puggle(0, 97, 153);                                // right beside Gus's burrow
@@ -675,6 +685,49 @@ export function buildOverworld() {
   puggle(47, 84, 20);
   eyes(48, [[106, 36], [114, 36]], [110, 39], 3.5, [110, 38, 5]);
   boulder(49, 80, 42);
+
+  // --- keepsakes: one-of-a-kind curios for the shelves of Gus's Burrow (KEEPSAKES in
+  // config.js). Same hiding shapes as the puggles, one per spot, never two alike in a
+  // region. The trophy and the drawing aren't placed: they're won, not found. Ids are save
+  // keys, so a spot can move but an id can't change.
+  const keep = (id, tx, ty, extra = {}) => propList.push({ kind: 'keepsake', id, tx, ty, ...extra });
+  const puzzleKeep = (id, pop, cfg) => {
+    puzzles.push({ id, doors: [], ground: T.GRASS, keepsake: id, ...cfg });
+    keep(id, pop[0], pop[1], { puzzle: id });
+  };
+  reeds('ks_lure', 84, 124, keep);                               // the village pond's reeds
+  patch('ks_stone', 44, 97, [-1, 1], keep);                      // west marsh, tall grass
+  nook('ks_boomerang', 4, 98, [1, 0], T.TREE, null, keep);       // a tree ring at the west edge
+  swimmer('ks_bottle', 128, 126, keep);                          // the river, above the bridge
+  nook('ks_egg', 193, 63, [-1, 0], T.BASALT, null, keep);        // Cinderscale, far east
+  walled('ks_opal', 158, 6, keep);                               // Cinderscale, north edge
+  boulder('ks_arrowhead', 176, 82, T.CRACKROCK, keep);           // Cinderscale, south
+  islet('ks_pearl', 170, 160, keep);                             // out in the lagoon
+  nook('ks_seaglass', 190, 150, [-1, 0], T.PALM, null, keep);    // a palm grove on the east beach
+  stones('ks_compass', [[[186, 135], [186, 137]]], [188, 135], [186, 136, 3], puzzleKeep);
+  nook('ks_kite', 44, 72, [0, 1], T.MESA, null, keep);           // south bluffs
+  walled('ks_meteor', 8, 32, keep);                              // west bluffs
+  nest('ks_feather', [68, 56], ['talon', 'owl', 'talon'], puzzleKeep, 'Predators are guarding something shiny!');
+  patch('ks_mushroom', 7, 158, [0, 1], keep);                    // Rootdeep, far west
+  boulder('ks_amber', 30, 190, T.CRYSTAL, keep);                 // Rootdeep, south
+  nook('ks_fossil', 64, 180, [1, 0], T.PINE, null, keep);        // Rootdeep, southeast
+  set(110, 10, T.STORMGRASS);                                    // the heart of a thorn patch
+  keep('ks_coin', 110, 10);
+  boulder('ks_thunder', 120, 41, T.CRACKROCK, keep);             // just inside the Great Gate
+
+  // --- buildings drawn as one big sprite over a solid footprint, each with a front door in
+  // its bottom row: Gus's burrow in the start glade, Mama Pearl's cottage in her meadow ---
+  const building = (id, sprite, x0, y0, w, h, extra = {}) => {
+    for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) set(x, y, T.BUILDING);
+    const [dx, dy] = HOUSES[id].door;
+    set(dx, dy, T.HDOOR);
+    propList.push({ kind: 'building', sprite, tx: x0, ty: y0, w, h, ...extra });
+    propList.push({ kind: 'house', id, tx: dx, ty: dy });
+  };
+  for (let x = 101; x <= 107; x++) if (CLEARABLE.has(get(x, 147))) set(x, 147, T.GRASS);
+  disc(104, 152, 2.2, (x, y) => { if (CLEARABLE.has(get(x, y))) set(x, y, T.GRASS); });   // front yard
+  building('gus', 'burrow_ext', 102, 148, 5, 3, { smoke: true });
+  building('mama', 'cottage_ext', 93, 120, 5, 3, { marker: 'mama' });
 
   // --- enemy spawners ---
   const rSp = rng(WORLD_SEED + 3);

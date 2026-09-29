@@ -21,8 +21,12 @@ Landscape is recommended, and it works nicely added to a home screen.
 - Optional side quests -- fetch errands and a friend to rescue -- marked with a "!" and
   tracked on the map, for players chasing 100%
 - Fifty baby platypuses (puggles) to find -- in tall grass, under rocks, out in deep water,
-  or behind little puzzles -- each one heading home to Mama Pearl's meadow. Find them all
+  or behind little puzzles -- each one heading home to Mama Pearl's cottage. Find them all
   for the God Sword, which fires a beam of light at full health
+- Houses to explore: Gus's own burrow, Mama Pearl's cottage full of puggles, Wombeau's shop
+  and the villagers' homes, each with things to look at and people to meet
+- Twenty keepsakes hidden around the Vale, each shown off on its own stand in Gus's burrow,
+  with Tully the collector trading rumors about where to look
 
 ## Built with
 

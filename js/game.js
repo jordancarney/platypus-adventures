@@ -1,13 +1,16 @@
 // Game orchestration: modes, areas, camera, spawning, combat, triggers, economy.
 import { VIEW_W, VIEW_H, TILE, SWORD_DMG, ARROWS, ARROW_TYPES, VESSEL_COSTS, HEART_PER_SHARD,
   CRAYFISH_HEAL, AMMO_CAPS, MAX_LEVEL, SHIELD_REFLECT, PLAYER, TELEPORT, SPRINT, DEBUG, SIDE_QUESTS,
-  GOD_SWORD_LV, PUGGLE_TOTAL, REGION_NAMES } from './config.js';
+  GOD_SWORD_LV, PUGGLE_TOTAL, REGION_NAMES, KEEPSAKES, KEEPSAKE_BY_ID, KEEPSAKE_TOTAL, KEEPSAKE_ARENA_WAVE, KEEPSAKE_PUGGLES } from './config.js';
 import { clamp, dist, aabb, lerp } from './util.js';
 import { T, drawTileTo, buildTileAtlas, isSolid } from './tiles.js';
 import { buildOverworld, REGION, REGION_KEYS, LM } from './worldgen.js';
 import { buildDungeon } from './dungeons.js';
+import { buildHouse, HOUSES } from './houses.js';
 import * as arena from './arena.js';
-import { Player, Arrow, SwordBeam, Pickup, Chest, Pot, PushBlock, Prop, Dolphin, Puggle, HomePuggle, DOLPHIN_LINES, moveEntity } from './entities.js';
+import { Player, Arrow, SwordBeam, Pickup, Chest, Pot, PushBlock, Prop, Dolphin, Puggle, HomePuggle, DOLPHIN_LINES, moveEntity,
+  Keepsake, Furniture, Pedestal, Building } from './entities.js';
+import { drawSprite } from './pixelart.js';
 import { makeEnemy } from './enemies.js';
 import { saveSlot, loadSlot, clearSlot, listSlots, SLOTS } from './save.js';
 import { input } from './input.js';
@@ -70,6 +73,10 @@ export class Game {
     this.slot = 0;          // which save file is in play
     this.slots = [];        // cached slot summaries for the file-select screen
     this.fileErase = null;  // slot index awaiting erase confirmation
+    this.owRef = null;      // the last overworld built, for the map and hints from indoors
+    this.holdUp = null;     // a keepsake Gus is holding up over his head, Zelda style
+    this.tullyTip = 0;      // which rumor Tully tells next
+    this.dotLine = -1;      // and which of her lines Dot is on
   }
 
   // ------------------------------------------------ state
@@ -84,7 +91,7 @@ export class Game {
       arrows: { ammo: 0, cap: PLAYER.baseAmmoCap, types },
       arrowSel: 'regular', quiver: 0,
       shards: 0, vessels: 0, arenaBest: 0,
-      dungeonsDone: {}, keys: {}, fangs: {}, flags: {}, quests: {}, puggles: {},
+      dungeonsDone: {}, keys: {}, fangs: {}, flags: {}, quests: {}, puggles: {}, keepsakes: {},
       area: 'overworld', pos: null,
       god: false,
     };
@@ -149,9 +156,13 @@ export class Game {
 
   // ------------------------------------------------ areas
   loadArea(id, pos = null) {
+    // a save from inside a house that no longer exists falls back to the village
+    if (id.startsWith('house_') && !HOUSES[id.slice(6)]) { id = 'overworld'; pos = null; }
     this.area = id === 'overworld' ? buildOverworld()
       : id === arena.ARENA_ID ? arena.buildArena()
-        : buildDungeon(id, this.state.flags);
+        : id.startsWith('house_') ? buildHouse(id.slice(6), this.state)
+          : buildDungeon(id, this.state.flags);
+    if (this.area.type === 'overworld') this.owRef = this.area;
     buildTileAtlas(this.area.theme);
     // apply persistent cracked tiles
     for (const key of Object.keys(this.state.flags)) {
@@ -172,9 +183,11 @@ export class Game {
     this.warpT = 0;
     this.arena = null;
     this.flash = 0.35;
+    this.holdUp = null;
 
     const start = pos || this.area.playerStart;
     this.player = new Player(start.x, start.y);
+    this.unstickPlayer();
 
     for (const p of this.area.props) {
       switch (p.kind) {
@@ -190,8 +203,12 @@ export class Game {
           break;
         case 'block': this.ents.push(new PushBlock(p.tx, p.ty)); break;
         case 'gate': if (!this.state.flags.gate_open) this.ents.push(new Prop(p)); break;
-        case 'dungeon': this.dungeonDoors.push(p); break;
+        case 'dungeon': case 'house': this.dungeonDoors.push(p); break;   // ways in: stairs and front doors
         case 'puggle': if (!this.state.puggles[p.id]) this.ents.push(new Puggle(p)); break;
+        case 'keepsake': if (!this.state.keepsakes[p.id]) this.ents.push(new Keepsake(p)); break;
+        case 'building': this.ents.push(new Building(p)); break;
+        case 'furniture': this.ents.push(new Furniture(p)); break;
+        case 'pedestal': this.ents.push(new Pedestal(p)); break;
         default: this.ents.push(new Prop(p));
       }
     }
@@ -247,6 +264,42 @@ export class Game {
     this.loadArea('overworld', { x: tx * TILE + 8, y: (ty + 1) * TILE + 12 });
     this.mode = 'play';
     this.save();
+  }
+  // Houses: walk into a front door (an HDOOR tile) to go in, onto the doormat to come out.
+  enterHouse(id) {
+    audio.sfx('house');
+    this.save();
+    this.loadArea('house_' + id);
+    this.player.facing = 'up';
+    this.mode = 'play';
+    this.regionToast = { text: this.area.name, t: 0 };
+    this.save();
+  }
+  exitHouse() {
+    audio.sfx('house');
+    const [tx, ty] = HOUSES[this.area.houseId].door;
+    this.loadArea('overworld', { x: tx * TILE + 8, y: (ty + 1) * TILE + 9 });
+    this.mode = 'play';
+    this.save();
+  }
+  // A save made where the world has since changed (a new building on the spot) must not
+  // load Gus inside a wall: nudge him to the nearest open tile.
+  unstickPlayer() {
+    const p = this.player;
+    const blocked = (x, y) => [[x - 4, y - 3], [x + 4, y - 3], [x - 4, y + 3], [x + 4, y + 3]]
+      .some(([cx, cy]) => isSolid(this.area.get(Math.floor(cx / TILE), Math.floor(cy / TILE))));
+    if (!blocked(p.cx, p.cy)) return;
+    const tx0 = Math.floor(p.cx / TILE), ty0 = Math.floor(p.cy / TILE);
+    for (let r = 1; r <= 8; r++) {
+      // nearest ring first, south side first: buildings face south, so that's out front
+      for (let dy = r; dy >= -r; dy--) for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const x = (tx0 + dx) * TILE + 8, y = (ty0 + dy) * TILE + 8;
+        if (blocked(x, y) || this.area.get(tx0 + dx, ty0 + dy) === T.HDOOR) continue;
+        p.x = x - p.w / 2; p.y = y - p.h / 2;
+        return;
+      }
+    }
   }
   tierHint() {
     const t = clamp(this.tier(), 0, 4);
@@ -545,8 +598,8 @@ export class Game {
     this.toasts.unshift({ text, t: 2.4 });
     if (this.toasts.length > 4) this.toasts.pop();
   }
-  setBanner(title, sub, color, cb) {
-    this.banner = { title, sub, color, t: 2.6, cb };
+  setBanner(title, sub, color, cb, icon = null) {
+    this.banner = { title, sub, color, t: 2.6, cb, icon };
     this.mode = 'banner';
   }
 
@@ -662,18 +715,17 @@ export class Game {
   // runs home to Mama Pearl in the village; finding all of them earns the God Sword.
   puggleCount() { return Object.keys(this.state.puggles || {}).length; }
 
-  // Every puggle found so far plays in Mama's meadow, each in its own look, laid out on a
-  // sunflower spiral around her so even all fifty read as a crowd rather than a pile.
+  // Every puggle found so far plays in Mama's cottage, each in its own look, laid out on a
+  // sunflower spiral around the middle of her rug so even all fifty read as a crowd.
   spawnBrood() {
     this.ents = this.ents.filter(e => !(e instanceof HomePuggle));
-    const mama = (this.area.props || []).find(p => p.dialog === 'mama');
-    if (!mama) return;
+    const c = this.area.brood;
+    if (!c) return;
     const num = id => parseInt(id.split('_')[1], 10);
     const ids = Object.keys(this.state.puggles).sort((a, b) => num(a) - num(b));
-    const cx = mama.tx * TILE + 8, cy = mama.ty * TILE + 16;
     ids.forEach((id, i) => {
       const r = 16 + 7 * Math.sqrt(i), a = i * 2.39996;
-      this.ents.push(new HomePuggle(id, cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.55));
+      this.ents.push(new HomePuggle(id, c.x + Math.cos(a) * r, c.y + Math.sin(a) * r * 0.55));
     });
   }
 
@@ -683,7 +735,6 @@ export class Game {
     if (st.puggles[pg.pid]) return;
     st.puggles[pg.pid] = true;
     const n = this.puggleCount();
-    this.spawnBrood();    // it scurries straight home to the meadow
     audio.sfx('puggle');
     this.burst(pg.cx, pg.cy - 4, '#ff9ad0', 8);
     this.burst(pg.cx, pg.cy - 4, '#fff6c8', 6);
@@ -714,13 +765,23 @@ export class Game {
     return this.state.flags.mama_met ? null : 'new';
   }
 
-  // Mama's hint: the region with the most puggles still out there (from the live world, so
-  // it's only ever given in the overworld, which is the only place she lives).
+  // The overworld as last built, for anything indoors that needs to know about outdoors
+  // (Mama's and Tully's hints, the map). A file loaded straight into a house builds one.
+  overworldRef() {
+    if (!this.owRef) {
+      this.owRef = buildOverworld();
+      this.minimap = ui.buildMinimap(this.owRef);
+    }
+    return this.owRef;
+  }
+
+  // Mama's hint: the region with the most puggles still out there.
   puggleHint() {
+    const ow = this.overworldRef();
     const left = {};
-    for (const p of this.area.props || []) {
+    for (const p of ow.props) {
       if (p.kind !== 'puggle' || this.state.puggles[p.id]) continue;
-      const key = REGION_KEYS[this.area.regionAt(p.tx, p.ty)];
+      const key = REGION_KEYS[ow.regionAt(p.tx, p.ty)];
       left[key] = (left[key] || 0) + 1;
     }
     const [key, n] = Object.entries(left).sort((a, b) => b[1] - a[1])[0] || [];
@@ -741,11 +802,75 @@ export class Game {
       this.openDialog(d.name,
         `Oh, Gus! My ${PUGGLE_TOTAL} little puggles wandered off to explore the whole Vale, and they do love to hide!|They tuck themselves into tall grass and reeds, curl up under cracked rocks, and paddle out in deep water.|Some only pop out when you win their little games -- a stone out of place, a strange stone eye, a plate that wants a race.|Every one you find will scurry straight home to me. Find all ${PUGGLE_TOTAL}, and the GOD SWORD is yours -- the mightiest blade in the Vale!${found}`,
         () => { st.flags.mama_met = true; this.save(); });
+    } else if (n >= KEEPSAKE_PUGGLES && !st.keepsakes.ks_drawing) {
+      this.openDialog(d.name, `${n} of my little ones are home, all thanks to you! And they've been busy... They made you something, Gus. Hold still!`,
+        () => this.awardKeepsake('ks_drawing'));
     } else if (st.flags.god_sword) {
       this.openDialog(d.name, "All my babies are home safe, thanks to you. Keep that God Sword shining, Gus -- with every heart full, it throws a beam of pure light!");
     } else {
       this.openDialog(d.name, `${n} of my ${PUGGLE_TOTAL} puggles are home! ${this.puggleHint()}`);
     }
+  }
+
+  // ------------------------------------------------ keepsakes
+  // Curios for the gallery in Gus's Burrow (KEEPSAKES in config.js): most are hidden in the
+  // world, one is a Crucible prize, and Mama's puggles make one.
+  keepsakeCount() { return KEEPSAKES.filter(k => this.state.keepsakes[k.id]).length; }
+
+  collectKeepsake(ent) {
+    ent.dead = true;
+    this.awardKeepsake(ent.kid);
+  }
+
+  // Gus holds it up over his head while the banner plays, like any good hero would.
+  awardKeepsake(id) {
+    const st = this.state, k = KEEPSAKE_BY_ID[id];
+    if (!k || st.keepsakes[id]) return;
+    st.keepsakes[id] = true;
+    const n = this.keepsakeCount();
+    audio.sfx('keepsake');
+    this.holdUp = { sprite: k.sprite };
+    this.burst(this.player.cx, this.player.cy - 20, '#ffd84a', 12);
+    this.burst(this.player.cx, this.player.cy - 20, '#fff6c8', 8);
+    this.setBanner(k.name.toUpperCase(), `Keepsake ${n} of ${KEEPSAKE_TOTAL} -- on display at Gus's Burrow!`, '#ffd84a', () => {
+      this.holdUp = null;
+      if (n === 1) {
+        this.openDialog(null, `A KEEPSAKE! ${k.desc}|Gus tucks it in his bag. Back home in his burrow, there's a stand waiting for it -- and ${KEEPSAKE_TOTAL - 1} more stands waiting for other treasures.|Tully the collector, in the village, might know where to look.`);
+      }
+    }, k.sprite);
+    this.banner.t = 3.2;
+    this.save();
+  }
+
+  inspectKeepsake(id) {
+    const k = KEEPSAKE_BY_ID[id];
+    if (this.state.keepsakes[id]) this.openDialog(k.name, k.desc);
+    else this.openDialog(null, "An empty stand, waiting for a treasure. Tully the collector might know where one is hiding.");
+  }
+
+  // Tully's rumors: each chat gives the next keepsake still missing, round and round.
+  keepsakeRumor() {
+    const left = KEEPSAKES.filter(k => !this.state.keepsakes[k.id]);
+    if (!left.length) return null;
+    const k = left[this.tullyTip++ % left.length];
+    return k.hint;
+  }
+
+  inspectFurniture(f) {
+    const d = f.def;
+    if (d.talk === 'shop') { this.npcDialog({ dialog: 'shop' }); return; }
+    if (d.talk === 'map') {
+      this.openDialog(null, "Tully's own map of the Vale, covered in scribbles: 'curious rock here', 'suspicious rock here', 'rock?'", () => { this.mode = 'map'; });
+      return;
+    }
+    if (d.talk === 'plaque') {
+      const n = this.keepsakeCount();
+      this.openDialog(null, n >= KEEPSAKE_TOTAL
+        ? `GUS'S KEEPSAKES -- all ${KEEPSAKE_TOTAL} of them! The finest collection in the whole Vale.`
+        : `GUS'S KEEPSAKES -- ${n} of ${KEEPSAKE_TOTAL} found. Every empty stand is waiting for a treasure. Tully in the village hears all the rumors.`);
+      return;
+    }
+    this.openDialog(null, d.text);
   }
 
   // ------------------------------------------------ side quests
@@ -844,6 +969,25 @@ export class Game {
       this.fetchQuestDialog(d.name, 'yuma_chime');
     } else if (d.dialog === 'mama') {
       this.mamaDialog(d);
+    } else if (d.dialog === 'tully') {
+      const n = this.keepsakeCount(), rumor = this.keepsakeRumor();
+      if (!st.flags.tully_met) {
+        this.openDialog(d.name, `Well, well! Gus the Guardian, in MY humble hut. I'm Tully -- I collect curious things, and even more curious stories about them.|I hear you've started a little collection of your own. Keepsakes! Wonderful. Every one you find, you keep on a stand at home.|Here's a rumor to start you off: ${rumor}|Come back any time -- I always hear of another.`,
+          () => { st.flags.tully_met = true; this.save(); });
+      } else if (!rumor) {
+        this.openDialog(d.name, `All ${KEEPSAKE_TOTAL} keepsakes! Gus, your burrow is the finest museum in the Vale. I'm... I'm not even jealous. (He is a little jealous.)`);
+      } else {
+        this.openDialog(d.name, `${n} of ${KEEPSAKE_TOTAL} keepsakes so far! Here's what I've heard lately...|${rumor}`);
+      }
+    } else if (d.dialog === 'dot') {
+      const lines = [
+        "Hi Gus! Pip says you're gonna save the WHOLE Vale. Can I come? ...Mum says no.",
+        "Pip has thirty-seven pebbles. I have thirty-EIGHT. Don't tell him.",
+        "Did you know Captain the goldfish can hold his breath FOREVER? He's never come up once!",
+        "When I grow up I'm gonna be a River Guardian too. Or a crayfish. I haven't decided.",
+      ];
+      this.dotLine = (this.dotLine + 1) % lines.length;
+      this.openDialog(d.name, lines[this.dotLine]);
     }
   }
 
@@ -916,10 +1060,12 @@ export class Game {
           this.introPage++;
           audio.sfx('blip');
           if (this.introPage >= ui.INTRO_PAGES.length) {
-            this.loadArea('overworld');
+            // a new adventure starts at home, waking up beside the bed
+            const [wx, wy] = HOUSES.gus.wake;
+            this.loadArea('house_gus', { x: wx * TILE + 8, y: wy * TILE + 8 });
             this.mode = 'play';
-            audio.music('marsh');
             this.save();
+            this.openDialog(null, "Rise and shine, Gus! Today's the day your adventure begins.|Look around your burrow if you like -- press E next to things to check them out. When you're ready, head out the front door at the bottom.");
           }
         }
         break;
@@ -1034,23 +1180,31 @@ export class Game {
       this.checkPlates();
     }
 
-    // stairs
+    // stairs and front doors
     const ptx = Math.floor(p.cx / TILE), pty = Math.floor(p.cy / TILE);
-    if (this.area.get(ptx, pty) === T.STAIRS) {
-      if (this.area.type === 'overworld') {
+    const here = this.area.get(ptx, pty);
+    if (this.area.type === 'overworld') {
+      if (here === T.STAIRS || here === T.HDOOR) {
         const door = this.dungeonDoors.find(dd => dd.tx === ptx && dd.ty === pty);
-        if (door) { this.enterDungeon(door.id); return; }
-      } else {
-        this.exitDungeon();
-        return;
+        if (door) { if (door.kind === 'house') this.enterHouse(door.id); else this.enterDungeon(door.id); return; }
       }
+    } else if (here === T.EXIT) {
+      this.exitHouse();
+      return;
+    } else if (here === T.STAIRS) {
+      this.exitDungeon();
+      return;
     }
 
-    // interact
+    // interact. Furniture can be several tiles wide (a shop counter is five), so it's
+    // measured to its nearest edge rather than its middle.
     if (input.pressed('interact')) {
+      const reach = (e) => e instanceof Furniture
+        ? Math.hypot(Math.max(e.x - p.cx, 0, p.cx - e.x - e.w), Math.max(e.y - p.cy, 0, p.cy - e.y - e.h)) + 8
+        : dist(p.cx, p.cy, e.cx, e.cy);
       const near = this.ents
-        .filter(e => !e.dead && e.interact && dist(p.cx, p.cy, e.cx, e.cy) < 31 && this.propReachable(e))
-        .sort((a, b) => dist(p.cx, p.cy, a.cx, a.cy) - dist(p.cx, p.cy, b.cx, b.cy))[0];
+        .filter(e => !e.dead && e.interact && reach(e) < 31 && this.propReachable(e))
+        .sort((a, b) => reach(a) - reach(b))[0];
       if (near) near.interact(this);
     }
 
@@ -1105,8 +1259,9 @@ export class Game {
   solvePuzzle(p) {
     if (this.puzzleSolved(p)) return;
     this.state.flags['puzzle_' + p.id] = true;
-    // puggle puzzles just free their puggle, which hops out on its own next frame
+    // puggle and keepsake puzzles just uncover their prize, which appears on its own next frame
     if (p.puggle) { audio.sfx('switch'); this.toast('Peep! A puggle pops out!'); this.save(); return; }
+    if (p.keepsake) { this.toast('Something shiny appears!'); this.save(); return; }
     audio.sfx('shard');
     this.shake(4, 0.4);
     if (p.quest) { this.completeQuest(p.quest); return; }
@@ -1259,6 +1414,7 @@ export class Game {
     A.phase = 'breather';
     A.t = arena.BREATHER;
     this.save();
+    if (A.wave >= KEEPSAKE_ARENA_WAVE && !st.keepsakes.ks_trophy) this.awardKeepsake('ks_trophy');
   }
 
   updateArena(dt) {
@@ -1535,7 +1691,11 @@ export class Game {
 
   // ------------------------------------------------ camera & slides
   snapCamera() {
-    if (this.area.type === 'dungeon' && this.curRoom) {
+    if (this.area.type === 'house') {
+      // a house is smaller than the screen: center it, darkness all round
+      this.cam.x = Math.round((this.area.w * TILE - VIEW_W) / 2);
+      this.cam.y = Math.round((this.area.h * TILE - VIEW_H) / 2);
+    } else if (this.area.type === 'dungeon' && this.curRoom) {
       this.cam.x = this.curRoom.rx * VIEW_W;
       this.cam.y = this.curRoom.ry * VIEW_H;
     } else {
@@ -1544,7 +1704,7 @@ export class Game {
     }
   }
   updateCamera(dt) {
-    if (this.area.type === 'dungeon') { this.snapCamera(); return; }
+    if (this.area.type !== 'overworld') { this.snapCamera(); return; }
     const tx = clamp(this.player.cx - VIEW_W / 2, 0, this.area.w * TILE - VIEW_W);
     const ty = clamp(this.player.cy - VIEW_H / 2, 0, this.area.h * TILE - VIEW_H);
     this.cam.x = lerp(this.cam.x, tx, Math.min(1, dt * 8));
@@ -1707,6 +1867,13 @@ export class Game {
         if (left[0]) this.toast(`DEBUG: last puggle at ${left[0].def.tx},${left[0].def.ty}`);
       }
     }
+    // every keepsake at once; press again to clear them all
+    if (input.pressed('dbgKeepsakes')) {
+      const all = this.keepsakeCount() < KEEPSAKE_TOTAL;
+      for (const k of KEEPSAKES) { if (all) st.keepsakes[k.id] = true; else delete st.keepsakes[k.id]; }
+      this.ents = this.ents.filter(e => !(e instanceof Keepsake));
+      this.toast(`DEBUG: keepsakes ${all ? 'all found' : 'cleared'}`);
+    }
     if (input.pressed('dbgGod')) { st.god = !st.god; this.toast('DEBUG: god ' + (st.god ? 'ON' : 'OFF')); }
   }
 
@@ -1751,6 +1918,17 @@ export class Game {
     const drawList = [...this.ents, this.player].filter(e => e && !e.dead);
     drawList.sort((a, b) => (a.y + a.h) - (b.y + b.h));
     for (const e of drawList) e.draw(this, ctx);
+
+    // a newly found keepsake, held up high over Gus's head
+    if (this.holdUp && this.player) {
+      const x = this.player.cx, y = this.player.y - 7;
+      ctx.save();
+      ctx.globalAlpha = 0.3 + 0.15 * Math.sin(this.time * 6);
+      ctx.fillStyle = '#fff6c8';
+      ctx.beginPath(); ctx.arc(x, y - 5, 10, 0, 7); ctx.fill();
+      ctx.restore();
+      drawSprite(ctx, this.holdUp.sprite, x, y);
+    }
 
     // effects
     for (const fx of this.effects) {
@@ -1802,7 +1980,9 @@ export class Game {
 
   drawAtmosphere(ctx) {
     let tint = null;
-    if (this.area.type === 'dungeon') {
+    if (this.area.type === 'house') {
+      tint = 'rgba(255,190,120,0.06)';   // lamplight
+    } else if (this.area.type === 'dungeon') {
       tint = { fire: 'rgba(255,90,30,0.06)', water: 'rgba(40,140,220,0.08)', air: 'rgba(200,220,255,0.05)', earth: 'rgba(90,140,40,0.05)', nexus: 'rgba(140,80,220,0.10)' }[this.area.theme];
     } else {
       switch (this.regionCode) {

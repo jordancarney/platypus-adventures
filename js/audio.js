@@ -83,6 +83,11 @@ const SFX = {
     [1047, 1319, 1568].forEach((f, i) => tone({ f, dur: 0.09, type: 'triangle', vol: 0.22, at: 0.2 + i * 0.07 })); },
   beam:   () => { tone({ f: 700, f2: 1800, dur: 0.16, type: 'sawtooth', vol: 0.16 }); tone({ f: 1400, f2: 2800, dur: 0.2, type: 'triangle', vol: 0.2, at: 0.02 }); },
   stairs: () => { [700, 560, 450, 360].forEach((f, i) => tone({ f, dur: 0.09, type: 'triangle', vol: 0.3, at: i * 0.07 })); },
+  // a front door: a soft creak and a wooden bump
+  house:  () => { tone({ f: 260, f2: 340, dur: 0.16, type: 'triangle', vol: 0.18 }); tone({ f: 120, f2: 80, dur: 0.1, type: 'square', vol: 0.2, at: 0.14 }); },
+  // item get: a bright rising fanfare that holds its last note
+  keepsake: () => { [523, 659, 784, 1047].forEach((f, i) => tone({ f, dur: 0.12, type: 'square', vol: 0.28, at: i * 0.1 }));
+    tone({ f: 1319, dur: 0.5, type: 'triangle', vol: 0.32, at: 0.42 }); tone({ f: 1568, dur: 0.5, type: 'triangle', vol: 0.2, at: 0.42 }); },
 };
 
 // --- music: step-sequenced loops. Notes are semitones above the track root; null = rest. ---
@@ -99,6 +104,8 @@ const TRACKS = {
   dungeon: { bpm: 112, root: 110.0, bass: [0,N,N,0, 1,N,N,1, 0,N,N,0, 6,N,5,N], lead: [12,N,15,N, 13,N,12,N, 15,N,18,N, 17,N,13,N], type: 'square' },
   nexus: { bpm: 124, root: 92.5, bass: [0,0,N,0, 1,1,N,1, 3,3,N,3, 1,N,6,N], lead: [12,N,13,15, N,13,12,N, 15,13,12,18, 17,15,13,12], type: 'sawtooth' },
   boss: { bpm: 148, root: 87.31, bass: [0,0,3,0, 0,0,5,0, 0,0,3,0, 6,5,3,1], lead: [12,N,N,12, 15,13,12,N, 12,N,17,15, 13,N,12,N], type: 'sawtooth' },
+  // indoors: slow and cozy, a music-box lead over a lazy bass
+  home: { bpm: 84, root: 146.83, bass: [0,N,N,N, 5,N,N,N, 7,N,N,N, 5,N,4,N], lead: [16,N,19,N, 21,N,19,16, 14,N,16,N, 12,N,N,N], type: 'triangle' },
   victory: { bpm: 104, root: 130.81, bass: [0,N,5,N, 7,N,5,N, 0,N,5,N, 9,7,5,7], lead: [12,16,19,24, N,19,24,N, 26,24,21,19, 16,19,24,N], type: 'square' },
 };
 

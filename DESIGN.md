@@ -77,8 +77,11 @@ two in step when adding an action. Touch layout constants are in [js/touch.js](j
   SW  Rootdeep Forest (EARTH)|  S  Gus's Burrow (start)            |  SE  Mistfall Lagoon (WATER)
 ```
 
-- **Billabong Village** (hub): Elder Mirri (story, gives shield), Wombeau the Wombat (shop),
-  Diamond Shrine (heart vessels), save statue, bow chest, villagers with hints.
+- **Billabong Village** (hub): Elder Mirri (story, gives shield), Wombeau the Wombat (shop,
+  indoors), Diamond Shrine (heart vessels), save statue, bow chest, villagers with hints. All
+  four cottages can be entered (see [Houses](#houses)).
+- **Gus's Burrow** (start): a grassy mound with a round door in the glade south of the
+  village. A new game begins inside it.
 - The **Confluence Gate** north of the village opens only with all 4 Key Shards.
 - Regions have their own palettes, ambient particles, music, and enemy tables.
 
@@ -251,12 +254,14 @@ walled items without ever bombing them open.
 ## Puggles and the God Sword
 
 Fifty **puggles** (baby platypuses) are hidden around the overworld, Korok-style. Walking
-into one sends it home to **Mama Pearl**, who waits in the Puggle Meadow just outside the
-village's south gate on the burrow road. Every puggle found so far plays in the meadow
-(`HomePuggle`, laid out on a sunflower spiral around her so all fifty still read as a crowd).
+into one sends it home to **Mama Pearl**, whose cottage stands in the Puggle Meadow just
+outside the village's south gate on the burrow road. Every puggle found so far plays inside
+(`HomePuggle`, laid out on a sunflower spiral around the middle of her rug so all fifty still
+read as a crowd), and a "!" floats over the cottage roof until Gus has met her.
 The map shows `PUGGLES n / 50`, puts a small dot where each found one was (like BotW's seed
 markers, so blank stretches show where to look), and the file-select card shows the count.
-Talking to Mama gives a hint: the region with the most puggles still out there.
+Talking to Mama gives a hint: the region with the most puggles still out there. With 25 home,
+she hands Gus the puggles' drawing of him (a [keepsake](#keepsakes)).
 
 Each puggle has its own look, fixed by its id (`puggleLook` in entities.js): one of three
 coats (tan, cream, chocolate) and either nothing or one accessory overlay -- a bow, leaf hat,
@@ -298,6 +303,74 @@ one on screen at a time, same damage as the slash, bursts into four diagonal spa
 strikes eye switches like an arrow. A faint glitter at Gus's side means the beam is ready. It
 is never sold: the shop's sword track ends at 6.
 
+## Houses
+
+Six buildings can be entered by walking into their front door (an `HDOOR` tile). Each interior
+is a single-room area of `type: 'house'`, authored in [js/houses.js](js/houses.js) as an ASCII map
+plus a furniture list. Rooms are smaller than the screen, so the camera centers them with dark
+all round; stepping onto the doormat (`EXIT`) walks back out, in front of the same door.
+
+| House | Where | Inside |
+|---|---|---|
+| Gus's Burrow | start glade (a mound with a round teal door) | his bed, Mum's knitting basket, Dad's armchair and empty sword rack, a family portrait, height marks on the wall, the fireplace, and the **keepsake gallery**: 20 stands |
+| Mama Pearl's Cottage | Puggle Meadow, outside the south gate | Mama and every puggle found so far, cribs, a toy box, fifty tiny lunch bowls |
+| Wombeau's Trading Post | village, northeast | the shop (talk to Wombeau or the counter), weapon rack, a crayfish tank |
+| Pip & Dot's House | village, northwest | Pip's little sister Dot, a goldfish named Captain, thirty-seven identical pebbles |
+| Tully's Curio Hut | village, southwest | Tully the echidna, who trades keepsake rumors; his wall map opens the world map |
+| Marlo's House | village, southeast | a portrait of Marlo's dad; the ring box shows the ring once Marlo's quest is done |
+
+- Village houses are tiles (`HDOOR`, `WINDOW`, `SHOPWALL` set into the `WALL` row); the burrow
+  and the cottage are one big painted sprite (`Building`) over a solid `BUILDING` footprint, so
+  Gus walks behind the roof and in front of the door.
+- Furniture (`Furniture` in entities.js) is solid across its footprint; tall pieces rise over
+  the back wall. `wall: true` pieces hang on the back wall instead. Inspecting one reads its
+  `text`, or hands off by `talk` (shop counter, Tully's map, the gallery plaque).
+- Interior tiles (floorboards, a two-row back wall, wall tops, rugs, doormat) are colored by
+  per-house themes in `THEMES` (tiles.js); `drawInteriorEdges` adds wall shadows, lit wall
+  lips and rug borders.
+- The map works indoors too: it shows the Vale, with Gus's dot on the door he came in by.
+  Houses play the `home` track (the shop keeps the village tune).
+- A save made standing where a building now stands is nudged to the nearest open tile on
+  load (`unstickPlayer`).
+
+## Keepsakes
+
+Twenty one-of-a-kind curios (`KEEPSAKES` in config.js). Walking into one plays an item-get
+fanfare, Gus holds it up over his head, and it appears on its own stand in the gallery of his
+burrow, where inspecting it reads its description. Empty stands show a "?" card. The map
+counts them (`KEEPSAKES n / 20`) and dots each one found.
+
+Eighteen are hidden in the overworld with the same shapes as the puggles (worldgen.js passes
+a `keep` placer instead of `puggle`), and two are won:
+
+| Keepsake | Where | How |
+|---|---|---|
+| Lucky Fishing Lure | village pond | in the reeds (cut them) |
+| Wishing Stone | west marsh | tall grass patch |
+| Old Boomerang | marsh, far west edge | nook in a ring of trees |
+| Message in a Bottle | river, above the lagoon-road bridge | swim to it |
+| Ember Egg | Cinderscale, far east | basalt nook |
+| Fire Opal | Cinderscale, north edge | sealed in cracked rock |
+| Obsidian Arrowhead | Cinderscale, south | under a cracked boulder |
+| Moon Pearl | Mistfall Lagoon | a tiny island with one palm |
+| Sea Glass | lagoon, east beach | palm grove nook |
+| Brass Compass | lagoon, northeast beach | push the stone onto its mark |
+| Red Kite | Skyreach, south | mesa nook |
+| Star Stone | Skyreach, west edge | sealed in cracked rock |
+| Golden Feather | Skyreach, south | guarded by a nest (talon, owl, talon) |
+| Glow Mushroom | Rootdeep, far west | tall grass patch |
+| Amber Drop | Rootdeep, south | inside a crystal (bomb arrow) |
+| Spiral Fossil | Rootdeep, southeast | pine nook |
+| Ancient Guardian Coin | Confluence, northeast | the heart of a thorn patch |
+| Thunder Egg | Confluence, east of the Great Gate | under a cracked boulder |
+| Crucible Trophy | the Crucible | clear wave 10 (`KEEPSAKE_ARENA_WAVE`) |
+| Puggle Drawing | Mama Pearl | talk to her with 25 puggles home (`KEEPSAKE_PUGGLES`) |
+
+Puzzle keepsakes are ordinary `puzzles` entries with a `keepsake` field, like the puggle
+puzzles. **Tully** (Tully's Curio Hut) gives one rumor per chat, cycling through every
+keepsake still missing; each has its own `hint` in config.js. Ids are save keys: never rename
+one, and never reuse one for a different curio.
+
 ## The Crucible (wave arena)
 
 A colosseum on the sand just outside the village's east gate — a coin/diamond sink-filler
@@ -331,7 +404,7 @@ that gives the shop and shrine economies somewhere to draw from once the overwor
 
 Open with `?debug=1` for cheats: F1 = unlock all gear, F2 = warp between dungeons,
 F3 = full heal, F4 = +500 coins/+50 diamonds, F5 = find all puggles but one (again for the
-last, which grants the God Sword), G = god mode.
+last, which grants the God Sword), F6 = find every keepsake (again to clear them), G = god mode.
 
 ## File map
 
@@ -348,10 +421,12 @@ last, which grants the God Sword), G = god mode.
 | `js/updates.js` | polls version.js, self-refreshes stale sessions |
 | `js/audio.js` | WebAudio SFX synth + music sequencer |
 | `js/pixelart.js` | ASCII pixel-map sprite atlas |
+| `js/houseart.js` | furniture, keepsake and housemate art, plus the painted burrow and cottage |
 | `js/tiles.js` | tile ids, defs, procedural tile atlas |
 | `js/worldgen.js` | seeded overworld builder (regions, village, roads, spawners, props) |
 | `js/dungeons.js` | 5 dungeons authored as ASCII rooms + parser |
-| `js/entities.js` | player, projectiles, pickups, chests, NPCs, blocks |
+| `js/houses.js` | the six house interiors (ASCII rooms + furniture) and where their doors are |
+| `js/entities.js` | player, projectiles, pickups, chests, NPCs, blocks, keepsakes, furniture |
 | `js/enemies.js` | enemy AI archetypes, types, minibosses, bosses |
 | `js/save.js` | localStorage save/load |
 | `js/ui.js` | HUD, title, dialogs, shop, map, pause, death, victory |

@@ -1,9 +1,9 @@
 // Player, projectiles, pickups, chests, props, push blocks.
 import { TILE, PLAYER, SWORD_LOOK, SWORD_DMG, SHIELD_LOOK, ARMOR_REDUCE, SHIELD_ARC, SHIELD_SLOW, BOW_COOLDOWN, BOW_POWER,
-  ARROWS, BURN, FREEZE_TIME, CHAIN_TARGETS, BOMB_RADIUS, CRAYFISH_HEAL, DROPS, SPRINT, GOD_SWORD_LV, GOD_BEAM, tierCoins } from './config.js';
+  ARROWS, BURN, FREEZE_TIME, CHAIN_TARGETS, BOMB_RADIUS, CRAYFISH_HEAL, DROPS, SPRINT, GOD_SWORD_LV, GOD_BEAM, KEEPSAKE_BY_ID, tierCoins } from './config.js';
 import { clamp, aabb, dist, dirTo, DIRS } from './util.js';
 import { T, props as tileProps } from './tiles.js';
-import { drawSprite, sprites, PUGGLE_ACCESSORIES } from './pixelart.js';
+import { drawSprite, sprites, frameName, PUGGLE_ACCESSORIES } from './pixelart.js';
 import { input } from './input.js';
 import { audio } from './audio.js';
 import { touch, buzz } from './touch.js';
@@ -988,6 +988,149 @@ export class HomePuggle extends Entity {
     ctx.fillStyle = '#25324144';
     ctx.fillRect(Math.round(this.cx) - 3, Math.round(this.bottom), 6, 1);
     drawPuggle(ctx, this.look, this.cx, this.bottom + 1 - this.z, { flip: this.flip, waddle: this.z > 0 });
+  }
+}
+
+// ---------------------------------------------------------------- KEEPSAKE (collectible)
+// A one-of-a-kind curio for Gus's shelves. Hides the same ways a puggle does (under tall
+// grass, reeds, cracked rock or crystal, or until its puzzle is solved); walk into it to
+// pick it up. Gleams while out in the open so it reads as treasure, not scenery.
+export class Keepsake extends Entity {
+  constructor(def) {
+    super(def.tx * TILE + 3, def.ty * TILE + 4, 10, 8);
+    this.def = def;
+    this.kid = def.id;
+    this.info = KEEPSAKE_BY_ID[def.id];
+    this.hidden = null;     // settled on the first update, so a load never plays the reveal
+    this.hintT = Math.random() * 2;
+  }
+  isHidden(g) {
+    if (this.def.puzzle && !g.state.flags['puzzle_' + this.def.puzzle]) return true;
+    return PUGGLE_COVER.has(g.area.get(Math.floor(this.cx / TILE), Math.floor(this.cy / TILE)));
+  }
+  update(g, dt) {
+    const p = g.player;
+    const d = dist(this.cx, this.cy, p.cx, p.cy);
+    const hid = this.isHidden(g);
+    if (this.hidden === null) this.hidden = hid;
+    if (this.hidden && !hid) { audio.sfx('switch'); g.burst(this.cx, this.cy - 4, '#ffd84a', 10); }
+    this.hidden = hid;
+    if (hid) {
+      // a golden glint gives away a covered one up close (puzzle prizes stay secret)
+      if (this.def.puzzle) return;
+      this.hintT -= dt;
+      if (d < 64 && this.hintT <= 0) {
+        this.hintT = 1 + Math.random() * 1.3;
+        for (let i = 0; i < 2; i++) g.addParticle(this.cx + (Math.random() - 0.5) * 10, this.cy - 3 - Math.random() * 6, '#ffd84a', 0.6, 0, -9, 1);
+      }
+      return;
+    }
+    if (Math.random() < dt * 2.5) g.addParticle(this.cx + (Math.random() - 0.5) * 10, this.cy - 4 - Math.random() * 8, '#fff6c8', 0.5, 0, -8, 1);
+    if (d < 13) g.collectKeepsake(this);
+  }
+  draw(g, ctx) {
+    if (this.hidden !== false || !this.info) return;
+    const tile = g.area.get(Math.floor(this.cx / TILE), Math.floor(this.cy / TILE));
+    const bob = Math.sin(g.time * 2.5 + this.id) * 1.5;
+    if (tileProps(tile).deep) {
+      // bobbing at the surface, only the top poking out, with a ripple ring
+      ctx.save();
+      ctx.beginPath(); ctx.rect(this.cx - 8, this.bottom - 16 + bob, 16, 12); ctx.clip();
+      drawSprite(ctx, this.info.sprite, this.cx, this.bottom + 1 + bob);
+      ctx.restore();
+      ctx.save();
+      ctx.globalAlpha = 0.45;
+      ctx.strokeStyle = '#bfe8f2';
+      ctx.beginPath(); ctx.ellipse(this.cx, this.bottom - 3 + bob, 6 + Math.sin(g.time * 4) * 1, 2, 0, 0, 7); ctx.stroke();
+      ctx.restore();
+      return;
+    }
+    ctx.fillStyle = '#25324144';
+    ctx.fillRect(Math.round(this.cx) - 3, Math.round(this.bottom), 6, 1);
+    drawSprite(ctx, this.info.sprite, this.cx, this.bottom - 1 + bob);
+    // a four-point twinkle that comes and goes
+    const tw = Math.sin(g.time * 3 + this.id * 1.7);
+    if (tw > 0.55) {
+      const sx = Math.round(this.cx + 4), sy = Math.round(this.bottom - 10 + bob);
+      ctx.fillStyle = '#fff8d0';
+      ctx.fillRect(sx, sy - 1, 1, 3); ctx.fillRect(sx - 1, sy, 3, 1);
+    }
+  }
+}
+
+// ---------------------------------------------------------------- HOUSE FURNITURE
+// A piece of furniture from houses.js. Solid across its footprint, except `wall` pieces,
+// which hang on the back wall (sorted behind Gus by their wall tile). Inspecting one reads
+// its `text`, or hands off to game.js for `talk` pieces (the shop counter, Tully's map...).
+export class Furniture extends Entity {
+  constructor(def) {
+    super(def.tx * TILE, def.ty * TILE, (def.w || 1) * TILE, (def.h || 1) * TILE);
+    this.def = def;
+    this.solid = !def.wall;
+    if (def.text || def.talk) this.interact = (g) => g.inspectFurniture(this);
+  }
+  draw(g, ctx) {
+    const d = this.def, by = this.bottom - (d.hang || 0);
+    if (d.glow) {
+      // warm light pooling around a fire or lamp, fading out at the edge, with a flicker
+      const gx = this.cx, gy = by - (d.wall ? 6 : 14), r = d.wall ? 16 : 30;
+      const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, r);
+      grad.addColorStop(0, d.glow);
+      grad.addColorStop(1, d.glow + '00');
+      ctx.save();
+      ctx.globalAlpha = 0.16 + 0.04 * Math.sin(g.time * 7 + this.id) + 0.02 * Math.sin(g.time * 17);
+      ctx.fillStyle = grad;
+      ctx.fillRect(gx - r, gy - r, r * 2, r * 2);
+      ctx.restore();
+    }
+    drawSprite(ctx, frameName(d.sprite, g.time * 5), this.cx, by);
+  }
+}
+
+// One stand in Gus's keepsake gallery: the keepsake on top once found (a gentle bob and a
+// glint), a little "?" card until then.
+export class Pedestal extends Entity {
+  constructor(def) {
+    super(def.tx * TILE + 2, def.ty * TILE + 4, 12, 12);
+    this.solid = true;
+    this.kid = def.keepsake;
+    this.info = KEEPSAKE_BY_ID[def.keepsake];
+  }
+  interact(g) { g.inspectKeepsake(this.kid); }
+  draw(g, ctx) {
+    drawSprite(ctx, 'pedestal', this.cx, this.bottom);
+    const top = this.bottom - 9;
+    if (!g.state.keepsakes[this.kid]) { drawSprite(ctx, 'emptycard', this.cx, top, { alpha: 0.8 }); return; }
+    const bob = Math.round(Math.sin(g.time * 1.8 + this.id) * 1);
+    drawSprite(ctx, this.info.sprite, this.cx, top - 1 + bob);
+    if (Math.sin(g.time * 2.2 + this.id * 2.3) > 0.8) {
+      ctx.fillStyle = '#fff8d0';
+      const sx = Math.round(this.cx + 4), sy = top - 8 + bob;
+      ctx.fillRect(sx, sy - 1, 1, 3); ctx.fillRect(sx - 1, sy, 3, 1);
+    }
+  }
+}
+
+// A building drawn as one big sprite over its solid footprint (Gus's burrow, Mama's
+// cottage). Sorted by the footprint's bottom edge, so Gus walks behind the roof and in
+// front of the door. Purely scenery: the door tile underneath does the entering.
+export class Building extends Entity {
+  constructor(def) {
+    super(def.tx * TILE, def.ty * TILE, def.w * TILE, def.h * TILE);
+    this.def = def;
+    this.smokeT = 0;
+  }
+  update(g, dt) {
+    if (!this.def.smoke || (this.smokeT -= dt) > 0) return;
+    this.smokeT = 0.35 + Math.random() * 0.3;
+    // a lazy puff from the burrow's chimney pipe (at x 58 of its 80px sprite)
+    g.addParticle(this.x + 58 + (Math.random() - 0.5) * 3, this.bottom - 55, '#d8d4cc', 1.4, 8 + Math.random() * 10, -70, 2);
+  }
+  draw(g, ctx) {
+    drawSprite(ctx, this.def.sprite, this.cx, this.bottom);
+    // Mama's "come meet me" marker floats over the roof ridge, where it shows from afar
+    const marker = this.def.marker === 'mama' ? g.mamaMarker() : null;
+    if (marker) drawQuestMarker(ctx, this.cx, this.bottom - sprites[this.def.sprite].h - 2, marker, g.time, this.id);
   }
 }
 
