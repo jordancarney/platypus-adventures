@@ -23,10 +23,15 @@ export const T = {
   // house interiors (theme-colored): floorboards, the back wall's two visible rows (with an
   // optional window), the timber wall tops seen from above, a bordered rug, and the doormat
   HFLOOR: 52, HWALL_UP: 53, HWALL: 54, HWIN: 55, HBEAM: 56, RUG: 57, EXIT: 58,
+  // the endgame: the Great Chasm's bottomless pit, a bridge end that leads off to another
+  // area, alien goo, the Goo Lands' ground and rocks, and the Star Hive's grand staircase
+  PIT: 59, PASSAGE: 60, GOO: 61, XSOIL: 62, XSOIL2: 63, XROCK: 64, XSPIRE: 65, XPLANT: 66,
+  XCLIFF: 67, STEPS: 68,
 };
 
 // ---------- tile properties ----------
 // solid: blocks walking · deep: swimmable · lava/dmg: hurts · slow: speed penalty · cut: sword clears it
+// pit: a drop only fliers (and arrows) can cross
 const P = {};
 const def = (id, props) => { P[id] = props; };
 def(T.GRASS, {}); def(T.GRASS2, {}); def(T.TALLGRASS, { cut: true, slow: true }); def(T.FLOWER, {});
@@ -49,6 +54,9 @@ def(T.HDOOR, { door: true }); def(T.WINDOW, { solid: true }); def(T.SHOPWALL, { 
 def(T.BUILDING, { solid: true });
 def(T.HFLOOR, {}); def(T.HWALL_UP, { solid: true }); def(T.HWALL, { solid: true }); def(T.HWIN, { solid: true });
 def(T.HBEAM, { solid: true }); def(T.RUG, {}); def(T.EXIT, {});
+def(T.PIT, { pit: true }); def(T.PASSAGE, {}); def(T.GOO, { goo: true });
+def(T.XSOIL, {}); def(T.XSOIL2, {}); def(T.XROCK, { solid: true }); def(T.XSPIRE, { solid: true });
+def(T.XPLANT, {}); def(T.XCLIFF, { solid: true }); def(T.STEPS, {});
 
 // ---------- dungeon themes ----------
 export const THEMES = {
@@ -60,6 +68,9 @@ export const THEMES = {
   earth: { floor: '#3a3020', floor2: '#443826', wall: '#5a4a2e', wallTop: '#7a6642', accent: '#a8d84a' },
   nexus: { floor: '#2c2038', floor2: '#342644', wall: '#4a3462', wallTop: '#664a86', accent: '#c88aff' },
   arena: { floor: '#c2a86c', floor2: '#d4bc80', wall: '#8a7a5e', wallTop: '#b09a78', accent: '#f0c83a' },
+  // the Goo Lands (an outdoor area: its pit lips borrow these) and Xenomantis's Star Hive
+  goo:   { floor: '#2e2640', floor2: '#383050', wall: '#4a3a5e', wallTop: '#685482', accent: '#8aff6a' },
+  hive:  { floor: '#1e2c26', floor2: '#283a30', wall: '#3a2848', wallTop: '#5a4270', accent: '#9aff5a' },
   // House interiors. `paper`/`paper2` and `pattern` dress the back wall, `trim` is the
   // wainscot and crown moulding, `beam` the wall tops seen from above, and `accent`/`rug2`
   // the rug and its border. Themes without these (the dungeons) fall back to their masonry.
@@ -262,6 +273,51 @@ function paintTile(g, id, frame, theme, variant = 0) {
         px(x, y, '#789266', 1, 12 - y); px(x - 1, y + 5, '#47725a', 1, 5);
         px(x, y, '#785743', 2, 3); px(x, y, '#b18b61');
       } break;
+    // ---- the endgame ----
+    case T.PIT: fill('#07050c');
+      px(2 + variant * 3, 9, '#16101f'); px(11 - variant, 4, '#120d1a'); px(6, 13 - variant, '#16101f'); break;
+    case T.PASSAGE:
+      // the bridge running on off the edge into the dark
+      fill('#a17c55');
+      for (let y = 0; y < 16; y += 4) { px(0, y, '#584650', 16); px(0, y + 1, '#c49e70', 16); px(4 + (y + variant) % 5, y + 2, '#8b694f', 4); }
+      px(0, 0, '#07050c99', 16, 16);
+      px(3 + variant * 2, 5, frame ? '#c8f0ff' : '#7a9ab0'); px(10, 11 - variant, frame ? '#7a9ab0' : '#c8f0ff'); break;
+    case T.GOO: {
+      // toxic slime: water's moving ripples in a sickly lime, plus a fat bubble that swells
+      // and pops, so a goo pool reads as liquid rather than a patch of lawn
+      water('#7ccf2a', '#5aa81e', '#e4ff9a');
+      const [bx, by] = frame ? [3 + variant * 2, 9] : [10 - variant, 3];
+      px(bx, by, '#3f7a14', 4, 3); px(bx + 1, by - 1, '#3f7a14', 2, 1);
+      px(bx + 1, by, '#f4ffd0', 2, 1); px(bx, by + 1, '#f4ffd0');
+      px(13 - variant, 12, '#f4ffd0'); break;
+    }
+    case T.XSOIL: fill('#4a3e5a');
+      speckle(4, '#55486a'); px(2 + variant, 6, '#3e3350', 4); px(10 - variant, 12, '#3e3350', 3); break;
+    case T.XSOIL2: fill('#4a3e5a');
+      speckle(3, '#55486a'); px(3 + variant * 2, 5, '#3e3350', 3);
+      px(5 + variant, 10, '#7ae0c0'); px(12 - variant, 3, '#b07ae0'); break;
+    case T.XROCK: rock('#6a5a7a', '#9a88b0', '#3e3250', '#4a3e5a');
+      px(9, 5, '#7ae0c0', 1, 2); break;
+    case T.XSPIRE: fill('#4a3e5a');
+      px(3, 13, '#2a203666', 11, 2);
+      px(6, 2, '#5a2a7a', 4, 12); px(7, 0, '#8a4ab0', 2, 3); px(7, 3, '#c88aff', 1, 9);
+      px(2, 7, '#2a6a6a', 3, 7); px(3, 5, '#5ad0c0', 1, 4);
+      px(11, 8, '#2a6a6a', 3, 6); px(12, 6, '#5ad0c0', 1, 4);
+      px(7, 1, frame ? '#fff0ff' : '#e0b0ff'); px(3, 5, frame ? '#d0fff8' : '#8af0e0'); break;
+    case T.XPLANT: fill('#4a3e5a'); speckle(3, '#55486a');
+      for (const [x, h, c] of [[3, 7, '#ff7ad8'], [8, 10, '#7affd0'], [12, 6, '#ff7ad8']]) {
+        px(x, 15 - h, '#3a6a4a', 1, h); px(x - 1, 14 - h, c, 3, 2); px(x, 14 - h, '#ffffff');
+      } break;
+    case T.XCLIFF: fill('#3a2e48'); px(0, 0, '#4e3e60', 16, 4); px(0, 4, '#2c2238', 16, 1);
+      speckle(6, '#2c2238'); px(0, 13, '#261d30', 16, 3); px(5 + variant, 8, '#7ae0c0'); break;
+    case T.STEPS: fill(th.floor);
+      for (let y = 0; y < 16; y += 4) {
+        px(0, y, th.floor2, 16, 3);                         // the tread, lit
+        px(0, y + 3, shade(th.floor, -0.45), 16, 1);        // the riser's shadow
+        px(0, y, shade(th.floor2, 0.15), 16, 1);            // the nosing
+      }
+      px(0, 0, shade(th.floor, -0.3), 1, 16); px(15, 0, shade(th.floor, -0.3), 1, 16); break;
+
     case T.THORNS: fill('#3e6956'); for (let i = 0; i < 3; i++) { px(1 + i * 5, 6, '#6a3a5a', 3, 8); px(2 + i * 5, 3, '#8a4a72', 1, 4); } break;
 
     // ---- dungeon tiles (theme-colored) ----
@@ -377,7 +433,8 @@ export function buildTileAtlas(theme = 'ow') {
   return atlases[theme];
 }
 
-const ANIMATED = new Set([T.SHALLOW, T.DEEP, T.LAVA, T.DLAVA, T.DWATER, T.TORCH, T.SPIKES, T.GUST, T.ASH, T.BASALT, T.STORMROCK]);
+const ANIMATED = new Set([T.SHALLOW, T.DEEP, T.LAVA, T.DLAVA, T.DWATER, T.TORCH, T.SPIKES, T.GUST, T.ASH, T.BASALT, T.STORMROCK,
+  T.GOO, T.XSPIRE, T.PASSAGE]);
 
 export function drawTileTo(ctx, theme, id, x, y, time, neighbors = null) {
   const atlas = atlases[theme] || buildTileAtlas(theme);
@@ -389,7 +446,25 @@ export function drawTileTo(ctx, theme, id, x, y, time, neighbors = null) {
   if (neighbors) {
     drawBanks(ctx, id, x, y, neighbors);
     drawInteriorEdges(ctx, theme, id, x, y, neighbors);
+    if (id === T.PIT) drawPitLip(ctx, theme, x, y, neighbors);
   }
+}
+
+// The chasm's near wall: wherever solid ground (or a bridge) stops at a pit's north edge,
+// a strip of rock face drops away into the dark, so the pit reads as deep, not just black.
+const OVER_PIT = new Set([T.PIT, T.PASSAGE]);
+function drawPitLip(ctx, theme, x, y, [n, e, s, w]) {
+  const th = THEMES[theme] || THEMES.ow;
+  if (!OVER_PIT.has(n)) {
+    const under = n === T.BRIDGE;
+    ctx.fillStyle = under ? '#3a2a24' : th.wall;
+    ctx.fillRect(x, y, 16, under ? 2 : 5);
+    ctx.fillStyle = under ? '#1a1214' : shade(th.wall, -0.4);
+    ctx.fillRect(x, y + (under ? 2 : 5), 16, 2);
+  }
+  ctx.fillStyle = '#ffffff10';
+  if (!OVER_PIT.has(w) && w !== T.BRIDGE) ctx.fillRect(x, y, 1, 16);
+  if (!OVER_PIT.has(e) && e !== T.BRIDGE) ctx.fillRect(x + 15, y, 1, 16);
 }
 
 // Interior depth, drawn inside the tile like the banks: floor in the lee of a wall takes a
@@ -438,16 +513,16 @@ export const props = (id) => P[id] || {};
 const WATER = new Set([T.SHALLOW, T.DEEP, T.DWATER, T.REED]);
 const HOT = new Set([T.LAVA, T.DLAVA]);
 function drawBanks(ctx, id, x, y, neighbors) {
-  const water = WATER.has(id), hot = HOT.has(id);
-  if (!water && !hot) return;
+  const water = WATER.has(id), hot = HOT.has(id), goo = id === T.GOO;
+  if (!water && !hot && !goo) return;
   neighbors.forEach((other, side) => {
-    if (other == null || WATER.has(other) || HOT.has(other) || other === T.BRIDGE) return;
-    ctx.fillStyle = hot ? '#743f48' : '#344f59';
+    if (other == null || WATER.has(other) || HOT.has(other) || other === T.BRIDGE || other === T.GOO) return;
+    ctx.fillStyle = goo ? '#1e3a14' : hot ? '#743f48' : '#344f59';
     if (side === 0) ctx.fillRect(x, y, 16, 2);
     if (side === 1) ctx.fillRect(x + 14, y, 2, 16);
     if (side === 2) ctx.fillRect(x, y + 14, 16, 2);
     if (side === 3) ctx.fillRect(x, y, 2, 16);
-    ctx.fillStyle = hot ? '#f2b16b' : '#8bb9ae';
+    ctx.fillStyle = goo ? '#c8ff8a' : hot ? '#f2b16b' : '#8bb9ae';
     if (side === 0 || side === 2) {
       ctx.fillRect(x + 2, y + (side === 0 ? 2 : 13), 5, 1);
       ctx.fillRect(x + 10, y + (side === 0 ? 2 : 13), 4, 1);

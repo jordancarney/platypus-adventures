@@ -14,6 +14,7 @@
 
 import { SWORD_LOOK, ARROWS } from './config.js';
 import { HOUSE_DEFS, buildHouseSprites } from './houseart.js';
+import { END_DEFS, buildEndSprites } from './endart.js';
 
 const DEFS = {};
 
@@ -1138,7 +1139,7 @@ const VARIANTS = {
   // Dot, Pip's little sister: a lighter coat and a pink scarf
   dot: { base: 'villager', colors: { b: '#c48a5a', l: '#f2d4a8', m: '#e27aa4' } },
 };
-Object.assign(DEFS, HOUSE_DEFS);
+Object.assign(DEFS, HOUSE_DEFS, END_DEFS);
 
 // ---------- build ----------
 export const sprites = {}; // name -> {canvas, w, h}
@@ -1207,6 +1208,7 @@ export function buildSprites() {
   }
   sprites.gate = buildGateSprite();
   buildHouseSprites(sprites);
+  buildEndSprites(sprites, { DEFS, VARIANTS, renderMap, mix });
 }
 
 // Two-frame animation. A def's optional `map2` (a second pose on the same grid: the other

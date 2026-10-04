@@ -86,6 +86,12 @@ const SFX = {
   // a front door: a soft creak and a wooden bump
   house:  () => { tone({ f: 260, f2: 340, dur: 0.16, type: 'triangle', vol: 0.18 }); tone({ f: 120, f2: 80, dur: 0.1, type: 'square', vol: 0.2, at: 0.14 }); },
   // item get: a bright rising fanfare that holds its last note
+  // alien goo: a wet, bubbling glorp
+  goo:    () => { tone({ f: 180, f2: 420, dur: 0.12, type: 'sine', vol: 0.3 }); tone({ f: 240, f2: 120, dur: 0.16, type: 'triangle', vol: 0.22, at: 0.1 }); noise({ dur: 0.12, vol: 0.12, low: true }); },
+  // a mallet on a plank
+  hammer: () => { tone({ f: 260, f2: 140, dur: 0.06, type: 'square', vol: 0.32 }); noise({ dur: 0.05, vol: 0.25, low: true }); },
+  // a god crystal: a short alien chime
+  crystal:() => { tone({ f: 1320, f2: 1760, dur: 0.06, type: 'triangle', vol: 0.18 }); tone({ f: 990, dur: 0.08, type: 'sine', vol: 0.12, at: 0.05 }); },
   keepsake: () => { [523, 659, 784, 1047].forEach((f, i) => tone({ f, dur: 0.12, type: 'square', vol: 0.28, at: i * 0.1 }));
     tone({ f: 1319, dur: 0.5, type: 'triangle', vol: 0.32, at: 0.42 }); tone({ f: 1568, dur: 0.5, type: 'triangle', vol: 0.2, at: 0.42 }); },
 };
@@ -106,6 +112,12 @@ const TRACKS = {
   boss: { bpm: 148, root: 87.31, bass: [0,0,3,0, 0,0,5,0, 0,0,3,0, 6,5,3,1], lead: [12,N,N,12, 15,13,12,N, 12,N,17,15, 13,N,12,N], type: 'sawtooth' },
   // indoors: slow and cozy, a music-box lead over a lazy bass
   home: { bpm: 84, root: 146.83, bass: [0,N,N,N, 5,N,N,N, 7,N,N,N, 5,N,4,N], lead: [16,N,19,N, 21,N,19,16, 14,N,16,N, 12,N,N,N], type: 'triangle' },
+  // the Goo Lands: wobbly and alien, all tritones and slides
+  goo: { bpm: 96, root: 98.0, bass: [0,N,0,6, N,N,5,N, 0,N,0,6, N,N,1,N], lead: [12,N,18,N, 17,N,N,13, 12,N,18,19, N,18,13,N], type: 'triangle' },
+  // the Star Hive's staircase: a slow climb that keeps rising
+  hive: { bpm: 84, root: 87.31, bass: [0,N,N,N, 1,N,N,N, 3,N,N,N, 6,N,5,N], lead: [12,N,13,N, 15,N,13,N, 17,N,18,N, 20,N,18,N], type: 'sawtooth' },
+  // Xenomantis: the fastest, nastiest loop in the game
+  xeno: { bpm: 164, root: 82.41, bass: [0,0,6,0, 0,0,5,0, 0,0,6,0, 7,6,5,1], lead: [12,N,18,17, 12,N,13,N, 12,N,19,18, 17,N,13,12], type: 'sawtooth' },
   victory: { bpm: 104, root: 130.81, bass: [0,N,5,N, 7,N,5,N, 0,N,5,N, 9,7,5,7], lead: [12,16,19,24, N,19,24,N, 26,24,21,19, 16,19,24,N], type: 'square' },
 };
 

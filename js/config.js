@@ -29,6 +29,7 @@ export const KEYMAP = {
   Digit4: 'slot4', Digit5: 'slot5', Digit6: 'slot6',
   // debug (only honored with ?debug=1)
   F1: 'dbgGear', F2: 'dbgWarp', F3: 'dbgHeal', F4: 'dbgRich', F5: 'dbgPuggles', F6: 'dbgKeepsakes', KeyG: 'dbgGod',
+  F7: 'dbgCrystals', F8: 'dbgEndgame',
 };
 
 // --- player balance ---
@@ -89,8 +90,11 @@ export const SWORD_LOOK = [
 // The God Sword's full-health beam (Zelda style): one on screen at a time, same damage as
 // a slash, and it strikes eye switches like an arrow does.
 export const GOD_BEAM = { speed: 300, range: 240 };
-// flat damage reduction by armor tier (0-6); incoming damage is never reduced below 1
-export const ARMOR_REDUCE = [0, 1, 2, 3, 4, 5, 6];
+// flat damage reduction by armor tier (0-6, plus God Armor at 7); incoming damage is never
+// reduced below 1
+export const ARMOR_REDUCE = [0, 1, 2, 3, 4, 5, 6, 12];
+// God Armor: forged at the magic altar in the Goo Lands from god crystals, never bought
+export const GOD_ARMOR_LV = 7;
 
 // Per-level shield visuals. Sprite grows with the tier and the aura telegraphs the
 // mechanic: Lv4 is widest (wide arc), Lv5+ glow (no slow / double reflect).
@@ -218,13 +222,13 @@ export const REGION_NAMES = {
   marsh: 'Willow Marsh', village: 'Billabong Village',
   fire: 'Cinderscale Wastes', water: 'Mistfall Lagoon',
   air: 'Skyreach Bluffs', earth: 'Rootdeep Forest',
-  confluence: 'The Confluence',
+  confluence: 'The Confluence', goo: 'The Goo Lands',
 };
 
 export const DUNGEON_NAMES = {
   fire: 'The Molten Maw', water: 'The Sunken Grotto',
   air: 'The Tempest Spire', earth: 'The Rootdeep Barrow',
-  nexus: 'The Nexus of Fangs',
+  nexus: 'The Nexus of Fangs', hive: 'The Star Hive',
 };
 
 // Side quests: entirely optional, but required to 100% a file. `giver` is the NPC/dolphin
@@ -347,5 +351,33 @@ export const KEEPSAKE_TOTAL = KEEPSAKES.length;
 export const KEEPSAKE_BY_ID = Object.fromEntries(KEEPSAKES.map(k => [k.id, k]));
 export const KEEPSAKE_ARENA_WAVE = 10;     // clearing this wave in the Crucible wins the trophy
 export const KEEPSAKE_PUGGLES = 25;        // puggles home before Mama hands over the drawing
+
+// --- the endgame: past Apexus, across the Great Chasm ---
+// Every enemy in the Goo Lands has crawled out of alien goo: a zombie, far tougher than the
+// one it used to be, and worth a handful of god crystals. Enough crystals forge God Armor.
+export const CRYSTAL_GOAL = 300;
+export const ZOMBIE = {
+  hpMul: 2.5, dmgMul: 2, dmgAdd: 2, spdMul: 1.1,
+  crystals: 5,          // god crystals dropped by each zombie
+  respawn: 8,           // seconds before a goo pool burps up another one
+};
+// Xenomantis: three-quarters of three times Apexus's health (Apexus measured at the tier he's
+// fought at). Her hits are tuned against God Armor, which takes 12 off each: a bump costs
+// about four and a half hearts, a goo ball two. Fixed numbers, not tier-scaled.
+const APEXUS_TIER = 4;
+export const XENO = {
+  hp: Math.round(0.75 * 3 * tierHp(150, APEXUS_TIER)),
+  dmg: 21,
+  pdmg: 16,
+};
+// Mum and Dad, once freed, follow Gus everywhere but indoors and pitch in on every fight.
+// They can't be hurt. God Armor makes them hit harder too.
+export const FAMILY = {
+  dadDmg: 6, dadCd: 0.9,          // Dad's sword
+  mumLevel: 4, mumCd: 1.3,        // Mum's arrows (an arrow's damage is its level)
+  armorMul: 1.5,                  // damage multiplier once God Armor is forged
+  bossMul: 0.35,                  // ...but a boss is Gus's to beat: they only chip at one
+  crayCd: 22,                     // Mum tosses Gus a crayfish when he's low, this often
+};
 
 export const DEBUG = new URLSearchParams(location.search).has('debug');

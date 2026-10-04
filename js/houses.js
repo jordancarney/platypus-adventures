@@ -56,9 +56,13 @@ export const HOUSES = {
       { sprite: 'bookshelf', tx: 9, ty: 2, w: 2,
         text: "Gus's books: 'Crayfish and How to Catch Them', 'Swim Like a Champion', 'Great Guardians of the Vale', and a very worn-out comic called 'Captain Bill'." },
       { sprite: 'basket', tx: 4, ty: 3,
-        text: "Mum's knitting basket. There's still some teal yarn left -- the very same yarn as Gus's scarf." },
+        text: st.flags.parents_free
+          ? "Mum's knitting basket. She's already started on a brand-new scarf for Gus -- in alien-goo green."
+          : "Mum's knitting basket. There's still some teal yarn left -- the very same yarn as Gus's scarf." },
       { sprite: 'armchair', tx: 7, ty: 3,
-        text: "Dad's old armchair. It still has a Dad-shaped dent in it." },
+        text: st.flags.parents_free
+          ? "Dad's old armchair. After all this time, the Dad-shaped dent finally has its Dad back."
+          : "Dad's old armchair. It still has a Dad-shaped dent in it." },
       { sprite: 'table', tx: 3, ty: 6, w: 2,
         text: 'Breakfast: three crayfish, a snail salad and a big mug of pond tea. Gus left in a hurry!' },
       { sprite: 'stool', tx: 2, ty: 6 },
@@ -73,6 +77,11 @@ export const HOUSES = {
     ],
     // the keepsake gallery: twenty stands in rows on the big rug, lanes between them
     pedestals: () => KEEPSAKES.map((k, i) => ({ keepsake: k.id, tx: 13 + (i % 5) * 2, ty: 2 + Math.floor(i / 5) * 2 })),
+    // once they're rescued, Mum and Dad are home whenever Gus is
+    npcs: (st) => st.flags.parents_free ? [
+      { sprite: 'dad_home', name: 'Dad', dialog: 'dad', tx: 8, ty: 4 },
+      { sprite: 'mum_home', name: 'Mum', dialog: 'mum', tx: 5, ty: 4 },
+    ] : [],
   },
 
   mama: {
@@ -249,7 +258,8 @@ export function buildHouse(hid, state) {
   const props = [];
   for (const f of H.furniture(state)) props.push({ kind: 'furniture', ...f });
   for (const p of H.pedestals ? H.pedestals() : []) props.push({ kind: 'pedestal', ...p });
-  for (const n of H.npcs || []) props.push({ kind: 'npc', ...n });
+  const npcs = typeof H.npcs === 'function' ? H.npcs(state) : H.npcs || [];
+  for (const n of npcs) props.push({ kind: 'npc', ...n });
 
   // one room, so the dungeon room plumbing (camera, room lookups) has something to hold
   const room = { rx: 0, ry: 0, letter: 'H', spawns: [], killall: false, plates: [], eyes: [], gdoors: [] };

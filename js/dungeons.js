@@ -5,6 +5,13 @@
 //   'X' cracked wall (bomb)  'E' eye switch  'P' floor plate  'O' push block  'T' torch  '@' pot
 //   'S' exit stairs  's' player spawn  '1'-'9' chest  'a'-'e' enemies (per-dungeon legend)
 //   'M' miniboss  'Z' boss  '!' kill-all trigger marker
+//   '_' bottomless pit  'h' bridge planks  'u' unfinished bridge (pit until Mum and Dad finish it)
+//   '<' bridge end leading off to another area (`passageTo`)  '=' grand staircase steps  '*' alien goo
+//   A dungeon's `props` maps any other character to a prop placed there (cages, signs).
+//   A room's map may be bigger than one screen: it's built once, at the first layout cell its
+//   letter appears in (nudged by `offsets[letter]`, in tiles), and every cell it covers must
+//   carry its letter too. The camera then follows Gus around inside it.
+//   `openWhen` maps a room letter to a flag: once it's set, that room's 'G' doors stand open.
 // Door positions are fixed: N wall = row 0 col 12, S wall = row 14 col 12, W wall = row 7 col 0,
 // E wall = row 7 col 24 — so doors in adjacent rooms always form a two-tile pair.
 
@@ -571,12 +578,22 @@ const EARTH = {
 };
 
 // ---------------- NEXUS: The Nexus of Fangs ----------------
+// J (Apexus's jail) and K (the Guardian Bridge) are the endgame's: J opens off the boss
+// lair once Apexus falls, K off the entry hall once Mum and Dad have finished the bridge.
+// Both sit in what were empty layout slots, so no existing room moves.
 const NEXUS = {
   id: 'nexus', theme: 'nexus', name: 'The Nexus of Fangs', music: 'nexus',
   legend: { a: 'gknight', b: 'owl', c: 'tazzy', d: 'snapjaw', e: 'volteel' },
-  miniboss: null, boss: 'boss_apexus', bossName: 'APEXUS, THE PRIMAL CHIMERA',
+  miniboss: null, boss: 'boss_apexus', bossName: 'APEXUS, THE PRIMAL CHIMERA', noShard: true,
   chests: { 1: { arrowType: 'light' }, 2: { bigfang: 1 }, 3: { diamonds: 4 }, 4: { coins: 150 } },
-  layout: ['.HI', 'FCG', 'DBE', '.A.'],
+  layout: ['JHI', 'FCG', 'DBE', 'KA.'],
+  openWhen: { H: 'boss_nexus', J: 'boss_nexus', A: 'bridge_built', K: 'bridge_built' },
+  passageTo: 'goo',
+  props: {
+    Q: { kind: 'cage', who: 'dad' },
+    R: { kind: 'cage', who: 'mum' },
+    $: { kind: 'sign', text: "THE GUARDIAN BRIDGE.|Built by Mum and Dad, all the way across the Great Chasm to the Goo Lands." },
+  },
   rooms: {
     A: [ // entry
       DOOR_NS('D'),
@@ -586,7 +603,7 @@ const NEXUS = {
       EMPT,
       EMPT,
       EMPT,
-      EMPT,
+      SIDE('G', '#'),
       EMPT,
       '#......@.......@........#',
       EMPT,
@@ -722,7 +739,7 @@ const NEXUS = {
       EMPT,
       EMPT,
       '#...........Z...........#',
-      SIDE('#', 'B'),
+      SIDE('G', 'B'),
       EMPT,
       EMPT,
       EMPT,
@@ -731,15 +748,132 @@ const NEXUS = {
       WALL,
       WALL,
     ],
+    J: [ // Apexus's jail: Mum and Dad in cages, their half-built bridge over the Great Chasm
+      WALL,
+      '#________#T,,,,,,,,,,,,T#',
+      '#________#..............#',
+      '#________#...Q.....R....#',
+      '#________#..............#',
+      '#________#.....,,.......#',
+      '#________,..............#',
+      '<uuuuuhhh...............G',
+      '<uuuuuhhh...............#',
+      '#________,..............#',
+      '#________#..............#',
+      '#________#.......,......#',
+      '#________#..............#',
+      '#________#,,,,,,,,,,,,,,#',
+      WALL,
+    ],
+    K: [ // the Guardian Bridge: a shortcut from the entry hall straight to the Goo Lands
+      WALL,
+      '#______________#,,,,,,,T#',
+      '#______________#........#',
+      '#______________#...$....#',
+      '#______________#........#',
+      '#______________#........#',
+      '#______________,........#',
+      '<hhhhhhhhhhhhhh.........G',
+      '<hhhhhhhhhhhhhh.........#',
+      '#______________,........#',
+      '#______________#........#',
+      '#______________#........#',
+      '#______________#........#',
+      '#______________#,,,,,,,,#',
+      WALL,
+    ],
   },
 };
 
-export const DUNGEONS = { fire: FIRE, water: WATER, air: AIR, earth: EARTH, nexus: NEXUS };
+// ---------------------------------------------------------------- THE STAR HIVE
+// Xenomantis's nest, past the God Armor's force field in the Goo Lands. No puzzles and no
+// keys: an entry hall, then one long grand staircase climbing over the abyss, then her.
+const STAIRWAY = '#_________=====_________#';
+// Xenomantis's arena: 38x23, a screen and a half each way, with four crystal pillars to duck
+// behind (she stuns herself charging into one) and goo pooled in the corners
+const ARENA_ROW = (inner) => '#' + inner.padEnd(36, '.') + '#';
+const PILLARS = ARENA_ROW('.......##..................##');
+const ARENA = [
+  '#'.repeat(38),
+  '#T' + ','.repeat(34) + 'T#',
+  ARENA_ROW('.**..............................**'),
+  ARENA_ROW('.*................................*'),
+  PILLARS, PILLARS,
+  ARENA_ROW(''), ARENA_ROW(''), ARENA_ROW(''),
+  ARENA_ROW('..................Z'),
+  ARENA_ROW(''), ARENA_ROW(''), ARENA_ROW(''), ARENA_ROW(''), ARENA_ROW(''),
+  PILLARS, PILLARS,
+  ARENA_ROW(''),
+  ARENA_ROW('.*................................*'),
+  ARENA_ROW('.**..............................**'),
+  '#' + ','.repeat(36) + '#',
+  ARENA_ROW(''),
+  '#'.repeat(12) + 'D' + '#'.repeat(25),
+];
+const LANDING = '#_______=========_______#';
+const HIVE = {
+  id: 'hive', theme: 'hive', name: 'The Star Hive', music: 'hive', bossMusic: 'xeno',
+  legend: {}, miniboss: null, boss: 'boss_xeno', bossName: 'XENOMANTIS, THE ALIEN MANTIS', noShard: true,
+  zombies: true, chests: {},
+  // the arena (D) is a screen and a half each way, its door lined up over the stairway
+  layout: ['DD', 'DD', 'C.', 'B.', 'A.'],
+  offsets: { D: [0, 7] },
+  props: {
+    $: { kind: 'sign', text: 'The great staircase climbs up into the dark. Somewhere at the top, something enormous is buzzing...' },
+  },
+  rooms: {
+    A: [ // entry hall
+      DOOR_NS('D'),
+      '#T,,,,,,,,,,,,,,,,,,,,,T#',
+      EMPT,
+      '#..**..............**...#',
+      '#..***............***...#',
+      EMPT,
+      '#....,.............,....#',
+      EMPT,
+      '#..........$............#',
+      EMPT,
+      '#......@.......@........#',
+      EMPT,
+      '#...........s...........#',
+      '#...........S...........#',
+      WALL,
+    ],
+    B: [ // the stairway, first flight
+      DOOR_NS('D'),
+      STAIRWAY, STAIRWAY,
+      'T_________=====_________T',
+      STAIRWAY, STAIRWAY,
+      LANDING, LANDING, LANDING,
+      STAIRWAY, STAIRWAY,
+      'T_________=====_________T',
+      STAIRWAY, STAIRWAY,
+      DOOR_NS('D'),
+    ],
+    C: [ // the stairway, second flight
+      DOOR_NS('D'),
+      STAIRWAY,
+      LANDING, LANDING,
+      STAIRWAY,
+      'T_________=====_________T',
+      STAIRWAY, STAIRWAY, STAIRWAY,
+      'T_________=====_________T',
+      STAIRWAY,
+      LANDING, LANDING,
+      STAIRWAY,
+      DOOR_NS('D'),
+    ],
+    D: ARENA,
+  },
+};
+
+export const DUNGEONS = { fire: FIRE, water: WATER, air: AIR, earth: EARTH, nexus: NEXUS, hive: HIVE };
 
 const CHAR_TILE = {
   '#': T.DWALL, '.': T.DFLOOR, ',': T.DDECOR, '~': T.DWATER, '%': T.DLAVA, '^': T.SPIKES,
   '-': T.GUST, 'D': T.DOOR_OPEN, 'K': T.DOOR_LOCKED, 'B': T.DOOR_BOSS, 'G': T.DOOR_SHUT,
   'X': T.DCRACK, 'E': T.EYE, 'P': T.PLATE, 'T': T.TORCH, 'S': T.STAIRS,
+  '_': T.PIT, 'h': T.BRIDGE, '<': T.PASSAGE, '=': T.STEPS, '*': T.GOO,
 };
 
 // Build a playable Area from a dungeon definition + persistent flags.
@@ -753,6 +887,7 @@ export function buildDungeon(id, flags = {}) {
 
   const rooms = {};   // "rx,ry" -> { spawns, killall, plates, eyes, gdoors, letter }
   const propsList = [];
+  const links = [], unbuilt = [];
   let playerStart = null, exitStairs = null, bossRoom = null;
 
   for (let ry = 0; ry < rows; ry++) {
@@ -762,16 +897,24 @@ export function buildDungeon(id, flags = {}) {
       const map = D.rooms[letter];
       if (!map) continue;
       const rk = rx + ',' + ry;
-      const room = { rx, ry, letter, spawns: [], killall: false, plates: [], eyes: [], gdoors: [] };
+      // a big room already built from an earlier cell: this cell is just more of it
+      const built = Object.values(rooms).find(r => r.letter === letter);
+      if (built) { rooms[rk] = built; continue; }
+      const rw = Math.max(ROOM_W, ...map.map(r => r.length)), rh = Math.max(ROOM_H, map.length);
+      const [ox, oy] = (D.offsets && D.offsets[letter]) || [0, 0];
+      const bx = rx * ROOM_W + ox, by = ry * ROOM_H + oy;
+      const room = { rx, ry, letter, bx, by, bw: rw, bh: rh, spawns: [], killall: false, plates: [], eyes: [], gdoors: [] };
       rooms[rk] = room;
-      for (let y = 0; y < ROOM_H; y++) {
-        let row = map[y] || WALL;
-        if (row.length < ROOM_W) row += WALL.slice(0, ROOM_W - row.length);
-        for (let x = 0; x < ROOM_W; x++) {
+      for (let y = 0; y < rh; y++) {
+        let row = map[y] || '#'.repeat(rw);
+        if (row.length < rw) row += '#'.repeat(rw - row.length);
+        for (let x = 0; x < rw; x++) {
           const ch = row[x];
-          const gx = rx * ROOM_W + x, gy = ry * ROOM_H + y;
+          const gx = bx + x, gy = by + y;
           let tile = T.DFLOOR;
           if (ch in CHAR_TILE) tile = CHAR_TILE[ch];
+          else if (ch === 'u') { tile = flags.bridge_built ? T.BRIDGE : T.PIT; unbuilt.push([gx, gy]); }
+          else if (D.props && D.props[ch]) propsList.push({ ...D.props[ch], tx: gx, ty: gy });
           else if (ch === 's') playerStart = { x: gx * TILE + 8, y: gy * TILE + 8 };
           else if (ch >= '1' && ch <= '9')
             propsList.push({ kind: 'chest', tx: gx, ty: gy, id: `d_${id}_${ch}`, contents: D.chests[ch] || { coins: 20 } });
@@ -786,6 +929,7 @@ export function buildDungeon(id, flags = {}) {
           if ((tile === T.DOOR_LOCKED || tile === T.DCRACK || tile === T.DOOR_BOSS) && flags[`door_${id}_${gx}_${gy}`])
             tile = T.DOOR_OPEN;
           if (tile === T.STAIRS) exitStairs = { tx: gx, ty: gy };
+          if (tile === T.PASSAGE) links.push({ tx: gx, ty: gy, to: D.passageTo });
           if (tile === T.PLATE) room.plates.push({ x: gx, y: gy });
           if (tile === T.EYE) room.eyes.push({ x: gx, y: gy });
           if (tile === T.DOOR_SHUT) room.gdoors.push({ x: gx, y: gy });
@@ -801,7 +945,8 @@ export function buildDungeon(id, flags = {}) {
     get: (x, y) => inB(x, y) ? tiles[idx(x, y)] : T.DWALL,
     set: (x, y, t) => { if (inB(x, y)) tiles[idx(x, y)] = t; },
     regionAt: () => -1,
-    spawners: [], props: propsList,
+    spawners: [], props: propsList, links, unbuilt,
+    openWhen: D.openWhen || null, noShard: !!D.noShard, zombies: !!D.zombies, bossMusic: D.bossMusic || 'boss',
     playerStart, exitStairs,
     roomAt: (px, py) => {
       const rx = Math.floor(px / (ROOM_W * TILE)), ry = Math.floor(py / (ROOM_H * TILE));

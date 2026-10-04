@@ -1,7 +1,7 @@
 // Enemy AI archetypes, the bestiary, minibosses, and the five dungeon bosses.
-import { tierHp, tierDmg, BURN } from './config.js';
+import { tierHp, tierDmg, BURN, ZOMBIE, XENO } from './config.js';
 import { clamp, dist, dirTo } from './util.js';
-import { Entity, moveEntity, spawnDrops, EnemyShot } from './entities.js';
+import { Entity, moveEntity, spawnDrops, EnemyShot, Pickup } from './entities.js';
 import { drawSprite, frameName } from './pixelart.js';
 import { audio } from './audio.js';
 
@@ -231,6 +231,30 @@ const BEHAVIORS = {
       }
     } else BEHAVIORS.wander(g, e, dt);
   },
+  // Reef sharks: they hunt the dolphin they've chased into the bay, circling it, until Gus
+  // wades close; then they lunge right up into the shallows to bite, and peel off again.
+  shark(g, e, dt) {
+    const p = g.player, d = dist(e.cx, e.cy, p.cx, p.cy);
+    e.t1 -= dt;
+    if (e.state === 'bite') {
+      const r = moveEntity(g, e, e.dashX * e.spd * 2.6 * dt, e.dashY * e.spd * 2.6 * dt);
+      e.vx = e.dashX;
+      if (r.hitX || r.hitY || e.t1 <= 0) { e.state = 'back'; e.t1 = 1.1; }
+    } else if (e.state === 'back') {
+      approach(g, e, e.cx * 2 - p.cx, e.cy * 2 - p.cy + 30, e.spd * 0.8, dt);
+      if (e.t1 <= 0) { e.state = null; e.t1 = 0.6 + Math.random() * 1.2; }
+    } else if (d < e.aggro && e.t1 <= 0) {
+      e.state = 'bite'; e.t1 = 0.6;
+      [e.dashX, e.dashY] = dirTo(e.cx, e.cy, p.cx, p.cy);
+      audio.sfx('splash');
+    } else {
+      // Gus anywhere near the water is the bigger catch; otherwise back to the dolphin
+      const prey = d < 210 ? p : g.ents.find(x => x.isFlipper && !x.dead) || p;
+      const a = g.time * 1.4 + e.id * 1.9;
+      approach(g, e, prey.cx + Math.cos(a) * 34, prey.cy + Math.sin(a) * 20, e.spd, dt);
+    }
+    if (Math.random() < dt * 3) g.addParticle(e.cx - (e.vx >= 0 ? 8 : -8), e.cy + 2, '#bfe8f2', 0.4, 0, -6, 1);
+  },
   duelist(g, e, dt) {
     const p = g.player, d = dist(e.cx, e.cy, p.cx, p.cy);
     if (e.state === 'strike') {
@@ -268,6 +292,7 @@ export const ENEMY_TYPES = {
   python:    { sprite: 'python', w: 13, h: 9, hp: 5, dmg: 2, spd: 40, behavior: 'lunge', aggro: 85, name: 'Bramble Python' },
   tazzy:     { sprite: 'tazzy', w: 11, h: 9, hp: 5, dmg: 2, spd: 52, behavior: 'spinner', aggro: 95, name: 'Tazzy Whirl' },
   gknight:   { sprite: 'gknight', w: 12, h: 11, hp: 8, dmg: 3, spd: 46, behavior: 'duelist', shielded: true, aggro: 110, name: 'Goanna Knight' },
+  shark:     { sprite: 'shark', w: 16, h: 9, hp: 10, dmg: 3, spd: 66, behavior: 'shark', aquatic: true, aggro: 96, name: 'Reef Shark' },
   // minibosses
   mini_fox:    { sprite: 'mini_fox', w: 24, h: 14, hp: 24, dmg: 2, spd: 66, behavior: 'shooter', mb: true, aggro: 999, pdmg: 2, name: 'Ember Matron' },
   mini_eel:    { sprite: 'mini_eel', w: 22, h: 14, hp: 24, dmg: 2, spd: 56, behavior: 'aquatic', mb: true, aquatic: true, aggro: 999, pdmg: 2, name: 'Eel Matron' },
@@ -292,7 +317,19 @@ export class Enemy extends Entity {
       roomBounds: opts.roomBounds || null, howled: !!opts.noHowl,
     });
     if (this.behavior === 'lunge' && this.mb) this.mbSummon = true;
-    if (opts.elite) this.makeElite();
+    if (opts.zombie) this.makeZombie();
+    else if (opts.elite) this.makeElite();
+  }
+  // Crawled out of the alien goo: rot-green, glowing-eyed, far tougher, and worth a handful
+  // of god crystals. It spends its first moments hauling itself up out of the puddle.
+  makeZombie() {
+    this.zombie = true;
+    this.sprite = this.sprite + '_z';
+    this.hp = Math.round(this.hp * ZOMBIE.hpMul); this.maxHp = this.hp;
+    this.dmg = this.dmg * ZOMBIE.dmgMul + ZOMBIE.dmgAdd;
+    this.pdmg = this.pdmg * ZOMBIE.dmgMul + ZOMBIE.dmgAdd;
+    this.spd *= ZOMBIE.spdMul;
+    this.riseT = 0.7;
   }
   makeElite() {
     this.elite = true;
@@ -303,6 +340,14 @@ export class Enemy extends Entity {
   }
   update(g, dt) {
     this.flashT = Math.max(0, this.flashT - dt);
+    if (this.riseT > 0) {
+      // still climbing out of the goo: untouchable, harmless, bubbling
+      this.riseT -= dt;
+      this.submerged = this.riseT > 0;
+      if (Math.random() < dt * 20) g.addParticle(this.cx + (Math.random() - 0.5) * 12, this.bottom - 2, '#9aff6a', 0.4, 0, -20, 1);
+      return;
+    }
+    if (this.zombie && Math.random() < dt * 2) g.addParticle(this.cx + (Math.random() - 0.5) * this.w, this.cy, '#7ae85a', 0.5, 0, 14, 1);
     // status effects
     if (this.frozenT > 0) { this.frozenT -= dt; this.vx = this.vy = 0; return; }
     if (this.burnT > 0) {
@@ -350,9 +395,24 @@ export class Enemy extends Entity {
     g.burst(this.cx, this.cy - 4, '#e8e0d0', 10);
     g.burst(this.cx, this.cy - 4, '#a8a098', 6);
     spawnDrops(g, this.cx, this.cy, g.tier(), (this.elite ? 1 : 0) + (this.isMiniboss ? 3 : 0));
+    if (this.zombie) {
+      g.burst(this.cx, this.cy - 4, '#9aff6a', 10);
+      for (let i = 0; i < ZOMBIE.crystals; i++) g.spawn(new Pickup(this.cx, this.cy, 'crystal'));
+    }
     g.onEnemyDeath(this);
   }
   draw(g, ctx) {
+    if (this.riseT > 0) {
+      // rising out of the goo: only the part above the surface shows, over a bubbling ring
+      const shown = 1 - this.riseT / 0.7;
+      ctx.save();
+      ctx.fillStyle = '#4fa83a';
+      ctx.beginPath(); ctx.ellipse(this.cx, this.bottom, 9, 3, 0, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.rect(this.cx - 20, this.bottom - 30, 40, 30); ctx.clip();
+      drawSprite(ctx, this.sprite, this.cx, this.bottom + 2 + (1 - shown) * 14, { flip: this.vx < 0 });
+      ctx.restore();
+      return;
+    }
     if (this.hidden && !this.frozenT) {
       ctx.save(); ctx.globalAlpha = 0.13;
       drawSprite(ctx, this.sprite, this.cx, this.bottom + 2, { flip: this.vx < 0 });
@@ -403,6 +463,8 @@ const BOSS_DEFS = {
   boss_galestrike: { sprite: 'boss_galestrike', w: 30, h: 18, hp: 50, dmg: 3, spd: 75, fly: true, name: 'Galestrike' },
   boss_kinggoanna: { sprite: 'boss_kinggoanna', w: 26, h: 22, hp: 65, dmg: 3, spd: 45, name: 'King Goanna' },
   boss_apexus: { sprite: 'boss_apexus', w: 44, h: 26, hp: 150, dmg: 4, spd: 60, name: 'Apexus' },
+  // fixed stats (see XENO in config.js), not scaled by tier
+  boss_xeno: { sprite: 'boss_xeno', w: 52, h: 30, hp: XENO.hp, dmg: XENO.dmg, pdmg: XENO.pdmg, fixed: true, spd: 62, name: 'Xenomantis' },
 };
 
 export class Boss extends Entity {
@@ -411,8 +473,8 @@ export class Boss extends Entity {
     super(x - d.w / 2, y - d.h / 2, d.w, d.h);
     Object.assign(this, {
       team: 'enemy', type, sprite: d.sprite, name: d.name,
-      hp: tierHp(d.hp, tier), maxHp: tierHp(d.hp, tier),
-      dmg: tierDmg(d.dmg, tier), pdmg: tierDmg(2, tier),
+      hp: d.fixed ? d.hp : tierHp(d.hp, tier), maxHp: d.fixed ? d.hp : tierHp(d.hp, tier),
+      dmg: d.fixed ? d.dmg : tierDmg(d.dmg, tier), pdmg: d.fixed ? d.pdmg : tierDmg(2, tier),
       spd: d.spd, fly: d.fly, aquatic: d.aquatic,
       isBoss: true, tier, roomBounds,
       state: 'idle', t1: 1.2, phase: 0, flashT: 0, burnT: 0, burnTick: 0, frozenT: 0,
@@ -615,7 +677,93 @@ export class Boss extends Entity {
     }
   }
 
+  // --- Xenomantis: scythe dashes, goo spit, leaps that shake the hive, zombie broods ---
+  // Every attack is telegraphed (she flashes, rears up, or her shadow tracks Gus), because
+  // a single hit from her takes a big bite out of even a full set of hearts.
+  ai_xeno(g, dt) {
+    const p = g.player;
+    const frac = this.hp / this.maxHp;
+    const rage = frac < 0.33;
+    const sp = rage ? 1.3 : 1;
+    this.t1 -= dt;
+    // a brood of goo zombies at two-thirds and one-third health
+    for (const f of [0.66, 0.33]) {
+      if (frac < f && !this.summoned['z' + f]) {
+        this.summoned['z' + f] = true;
+        audio.sfx('roar');
+        g.toast('Xenomantis calls her brood!');
+        const b = this.roomBounds;
+        for (let i = 0; i < 3; i++) {
+          const types = ['dingo', 'wildcat', 'snapjaw', 'tazzy', 'gknight'];
+          g.spawnEnemy(types[(i + (f > 0.5 ? 0 : 2)) % types.length],
+            b.x + 60 + i * ((b.w - 120) / 2), b.y + 50 + (i % 2) * 120, { roomBounds: b });
+        }
+      }
+    }
+    if (this.state === 'idle') {
+      approach(g, this, p.cx, p.cy, this.spd * 0.55 * sp, dt);
+      if (this.t1 <= 0) {
+        const r = Math.random();
+        this.state = r < 0.34 ? 'tele' : r < 0.62 ? 'spit' : r < 0.84 ? 'leapup' : 'buzz';
+        this.t1 = { tele: 0.75, spit: 0.3, leapup: 0.5, buzz: 0.6 }[this.state] / sp;
+        this.bcount = 0;
+        if (this.state === 'buzz' || this.state === 'leapup') audio.sfx('roar');
+      }
+    } else if (this.state === 'tele') {
+      // rears back, scythes up, flashing
+      this.vx = p.cx - this.cx; this.vy = 0;
+      if (this.t1 <= 0) {
+        this.state = 'slash'; this.t1 = 0.85;
+        [this.dashX, this.dashY] = dirTo(this.cx, this.cy, p.cx, p.cy);
+        audio.sfx('slash');
+      }
+    } else if (this.state === 'slash') {
+      const r = moveEntity(g, this, this.dashX * this.spd * 3.6 * sp * dt, this.dashY * this.spd * 3.6 * sp * dt);
+      this.vx = this.dashX;
+      if (Math.random() < 0.6) g.addParticle(this.cx - this.dashX * 20, this.cy, '#e8f0c8', 0.3, 0, 0, 2);
+      if (r.hitX || r.hitY) { this.stunned = 1.3; this.state = 'idle'; this.t1 = 1.4; g.shake(5, 0.3); audio.sfx('boom'); }
+      else if (this.t1 <= 0) { this.state = 'idle'; this.t1 = 1.1; }
+    } else if (this.state === 'spit') {
+      // three fans of goo
+      this.vx = p.cx - this.cx; this.vy = 0;
+      if (this.t1 <= 0) {
+        this.t1 = 0.5 / sp; this.bcount++;
+        const n = rage ? 7 : 5;
+        for (let i = 0; i < n; i++) shootAt(g, this, p.cx, p.cy, 'goo', this.pdmg, 105, (i - (n - 1) / 2) * 0.24);
+        audio.sfx('goo');
+        if (this.bcount >= 3) { this.state = 'idle'; this.t1 = 1.4; }
+      }
+    } else if (this.state === 'leapup') {
+      // up and out of sight; only her shadow, sliding after Gus, gives her away
+      if (this.t1 <= 0) { this.state = 'airborne'; this.t1 = 1.4 / sp; this.submerged = true; }
+    } else if (this.state === 'airborne') {
+      approach(g, this, p.cx, p.cy, this.spd * 1.5 * sp, dt);
+      if (this.t1 <= 0) {
+        this.state = 'idle'; this.t1 = 1.6; this.submerged = false;
+        g.shockwave(this.cx, this.cy, 100, this.pdmg);
+        const n = rage ? 12 : 8;
+        for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2; g.spawn(new EnemyShot(this.cx, this.cy, Math.cos(a) * 85, Math.sin(a) * 85, 'goo', this.pdmg)); }
+        g.shake(7, 0.5); audio.sfx('boom');
+        g.burst(this.cx, this.cy, '#9aff6a', 16);
+      }
+    } else if (this.state === 'buzz') {
+      // wings up: a whirling spiral of goo
+      this.vx = p.cx - this.cx; this.vy = 0;
+      this.scount = (this.scount || 0) - dt;
+      if (this.scount <= 0) {
+        this.scount = 0.16;
+        this.spiral = (this.spiral || 0) + 0.55;
+        for (const off of [0, Math.PI]) {
+          const a = this.spiral + off;
+          g.spawn(new EnemyShot(this.cx, this.cy - 6, Math.cos(a) * 95, Math.sin(a) * 95, 'goo', this.pdmg));
+        }
+      }
+      if (this.t1 <= -1.6) { this.state = 'idle'; this.t1 = 1.3; audio.sfx('goo'); }
+    }
+  }
+
   draw(g, ctx) {
+    if (this.type === 'boss_xeno') { this.drawXeno(g, ctx); return; }
     if (this.submerged) {
       ctx.save(); ctx.globalAlpha = 0.45; ctx.fillStyle = this.type === 'boss_kinggoanna' ? '#3a3020' : '#0c2a3a';
       ctx.beginPath(); ctx.ellipse(this.cx, this.cy + 4, 16, 7, 0, 0, 7); ctx.fill();
@@ -649,6 +797,39 @@ export class Boss extends Entity {
     }
   }
 }
+
+// Xenomantis gets her own draw: an acid-green aura that turns red in a rage, a shadow that
+// grows as she drops out of a leap, and the wing-buzz frame whenever she's attacking.
+Boss.prototype.drawXeno = function (g, ctx) {
+  if (this.submerged) {
+    const fall = clamp(1 - this.t1 / 1.4, 0, 1);
+    ctx.save();
+    ctx.globalAlpha = 0.25 + fall * 0.35;
+    ctx.fillStyle = '#0a0610';
+    ctx.beginPath(); ctx.ellipse(this.cx, this.bottom, 10 + fall * 16, 4 + fall * 5, 0, 0, 7); ctx.fill();
+    ctx.restore();
+    return;
+  }
+  const rage = this.hp / this.maxHp < 0.33;
+  ctx.save();
+  ctx.globalAlpha = 0.22 + 0.1 * Math.sin(g.time * 7);
+  ctx.fillStyle = rage ? '#ff4a6a' : '#8aff6a';
+  ctx.beginPath(); ctx.arc(this.cx, this.cy - 10, 34, 0, 7); ctx.fill();
+  ctx.restore();
+  ctx.save(); ctx.globalAlpha = 0.3; ctx.fillStyle = '#000';
+  ctx.beginPath(); ctx.ellipse(this.cx, this.bottom + 2, 22, 5, 0, 0, 7); ctx.fill();
+  ctx.restore();
+  const busy = this.state !== 'idle' || this.stunned > 0;
+  const frame = this.state === 'buzz' || this.state === 'tele' ? Math.floor(g.time * 14) % 2 === 0 ? 'boss_xeno_2' : 'boss_xeno'
+    : busy ? 'boss_xeno' : frameName('boss_xeno', g.time * 3);
+  const opts = {
+    flip: this.vx < 0,
+    flash: this.flashT > 0 || (this.state === 'tele' && Math.floor(g.time * 10) % 2 === 0),
+  };
+  if (this.frozenT > 0) opts.tint = '#7ad4ff';
+  if (this.stunned > 0) opts.squash = 0.6;
+  drawSprite(ctx, frame, this.cx, this.bottom + 4, opts);
+};
 
 export function makeEnemy(type, x, y, tier, opts = {}) {
   if (BOSS_DEFS[type]) return new Boss(type, x, y, tier, opts.roomBounds);

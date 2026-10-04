@@ -13,13 +13,16 @@ function card(group, name, armor = 0) {
   cards.push({ ctx: canvas.getContext('2d'), name, armor });
 }
 ['gus_idle', 'gus_walk1', 'gus_swim'].forEach(n => card('hero', n));
-for (let n = 1; n <= 6; n++) card('hero', 'gus_idle', n);
-['rakali', 'adder', 'snapjaw', 'emberfox', 'mgoanna', 'kooka', 'volteel', 'cod', 'snapshell', 'talon', 'owl', 'dingo', 'wildcat', 'python', 'tazzy', 'gknight', 'boss_scorchjaw', 'boss_murkmaw', 'boss_galestrike', 'boss_kinggoanna', 'boss_apexus'].forEach(n => card('enemies', n));
+for (let n = 1; n <= 7; n++) card('hero', 'gus_idle', n);   // 7 is the God Armor
+['dad_idle', 'dad_walk1', 'mum_idle', 'mum_walk1', 'dad_home', 'mum_home'].forEach(n => card('hero', n));
+['rakali', 'adder', 'snapjaw', 'emberfox', 'mgoanna', 'kooka', 'volteel', 'cod', 'snapshell', 'talon', 'owl', 'dingo', 'wildcat', 'python', 'tazzy', 'gknight', 'boss_scorchjaw', 'boss_murkmaw', 'boss_galestrike', 'boss_kinggoanna', 'boss_apexus', 'boss_xeno', 'boss_xeno_2', 'mecha_apexus', 'shark',
+  'rakali_z', 'snapjaw_z', 'emberfox_z', 'owl_z', 'dingo_z', 'gknight_z'].forEach(n => card('enemies', n));
 for (const prefix of ['sword', 'bow', 'shield']) for (let n = 1; n <= 6; n++) card('items', prefix + n);
 card('items', 'sword7');   // the God Sword
-['coin', 'diamond', 'chest', 'chest_open', 'pot', 'bomb', 'key', 'crayfish', 'arrow_regular', 'arrow_fire', 'arrow_ice', 'arrow_lightning', 'arrow_bomb', 'arrow_light', 'statue', 'elder', 'wombat', 'dolphin', 'mama', 'puggle', 'puggle_cream', 'puggle_choc'].forEach(n => card('items', n));
+['coin', 'diamond', 'chest', 'chest_open', 'pot', 'bomb', 'key', 'crayfish', 'arrow_regular', 'arrow_fire', 'arrow_ice', 'arrow_lightning', 'arrow_bomb', 'arrow_light', 'statue', 'elder', 'wombat', 'dolphin', 'mama', 'puggle', 'puggle_cream', 'puggle_choc',
+  'godcrystal', 'cage', 'cage_open', 'altar'].forEach(n => card('items', n));
 KEEPSAKES.forEach(k => card('keepsakes', k.sprite));
-['burrow_ext', 'cottage_ext', 'tully', 'dot', 'bed', 'bunkbed', 'crib', 'fireplace', 'stove', 'bookshelf', 'cabinet', 'pebbleshelf',
+['burrow_ext', 'cottage_ext', 'hive_ext', 'tully', 'dot', 'bed', 'bunkbed', 'crib', 'fireplace', 'stove', 'bookshelf', 'cabinet', 'pebbleshelf',
   'table', 'lowtable', 'counter', 'stool', 'armchair', 'rocker', 'plant', 'basket', 'rod', 'toybox', 'barrel', 'applebarrel', 'crate',
   'tank', 'armorstand', 'fishbowl', 'telescope', 'books', 'ringbox', 'ringbox_full', 'pedestal', 'emptycard', 'portrait', 'portrait2',
   'puggleportrait', 'kidart', 'clock', 'lamp', 'plaque', 'swordrack', 'heightchart', 'growthchart', 'mountedfish', 'net', 'crochead',

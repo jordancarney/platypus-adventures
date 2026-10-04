@@ -1,7 +1,8 @@
 // Game orchestration: modes, areas, camera, spawning, combat, triggers, economy.
 import { VIEW_W, VIEW_H, TILE, SWORD_DMG, ARROWS, ARROW_TYPES, VESSEL_COSTS, HEART_PER_SHARD,
   CRAYFISH_HEAL, AMMO_CAPS, MAX_LEVEL, SHIELD_REFLECT, PLAYER, TELEPORT, SPRINT, DEBUG, SIDE_QUESTS,
-  GOD_SWORD_LV, PUGGLE_TOTAL, REGION_NAMES, KEEPSAKES, KEEPSAKE_BY_ID, KEEPSAKE_TOTAL, KEEPSAKE_ARENA_WAVE, KEEPSAKE_PUGGLES } from './config.js';
+  GOD_SWORD_LV, PUGGLE_TOTAL, REGION_NAMES, KEEPSAKES, KEEPSAKE_BY_ID, KEEPSAKE_TOTAL, KEEPSAKE_ARENA_WAVE, KEEPSAKE_PUGGLES,
+  GOD_ARMOR_LV, CRYSTAL_GOAL, ZOMBIE } from './config.js';
 import { clamp, dist, aabb, lerp } from './util.js';
 import { T, drawTileTo, buildTileAtlas, isSolid } from './tiles.js';
 import { buildOverworld, REGION, REGION_KEYS, LM } from './worldgen.js';
@@ -18,14 +19,18 @@ import { audio } from './audio.js';
 import { touch } from './touch.js';
 import * as ui from './ui.js';
 import { wrapText } from './font.js';
+import * as endgame from './endgame.js';
+import { Guardian, Cage, Barrier, GOO_LM } from './endgame.js';
+import * as cutscene from './cutscene.js';
+import * as epilogue from './epilogue.js';
 
 // Matches drawDialog's box in ui.js: panel spans x:8..VIEW_W-8, text starts at x=18,
 // leaving a small margin before the right border.
 const DIALOG_WRAP_PX = VIEW_W - 36;
 
-const REGION_MUSIC = ['marsh', 'fire', 'water', 'air', 'earth', 'confluence', 'village'];
+const REGION_MUSIC = ['marsh', 'fire', 'water', 'air', 'earth', 'confluence', 'village', 'goo'];
 // what's left behind when grass is cut or a cracked rock breaks, per overworld region
-const REGION_GROUND = [T.GRASS, T.ASH, T.SAND, T.PATH, T.DARKGRASS, T.STORMGRASS, T.GRASS];
+const REGION_GROUND = [T.GRASS, T.ASH, T.SAND, T.PATH, T.DARKGRASS, T.STORMGRASS, T.GRASS, T.XSOIL];
 const GATE_KEYS = { fire: 'fireGate', water: 'waterGate', air: 'airGate', earth: 'earthGate', nexus: 'nexusGate', arena: 'arenaGate' };
 
 export class Game {
@@ -53,7 +58,7 @@ export class Game {
     this.regionCode = -99;
     this.regionToast = null;
     this.muted = false;
-    this.introPage = 0;
+    this.movie = null;      // a cutscene playing: { cs, onDone }
     this.creditsY = 0;
     this.shopSel = 0; this.shopScroll = 0;
     this.pausePage = null;
@@ -90,7 +95,7 @@ export class Game {
       sword: 0, shield: 0, bow: 0, armor: 0,
       arrows: { ammo: 0, cap: PLAYER.baseAmmoCap, types },
       arrowSel: 'regular', quiver: 0,
-      shards: 0, vessels: 0, arenaBest: 0,
+      shards: 0, vessels: 0, arenaBest: 0, crystals: 0,
       dungeonsDone: {}, keys: {}, fangs: {}, flags: {}, quests: {}, puggles: {}, keepsakes: {},
       area: 'overworld', pos: null,
       god: false,
@@ -131,8 +136,18 @@ export class Game {
   newGame(slot = 0) {
     this.slot = clamp(slot, 0, SLOTS - 1);
     this.state = this.defaultState();
-    this.introPage = 0;
-    this.mode = 'intro';
+    this.playMovie('intro', () => {
+      // a new adventure starts at home, waking up beside the bed
+      const [wx, wy] = HOUSES.gus.wake;
+      this.loadArea('house_gus', { x: wx * TILE + 8, y: wy * TILE + 8 });
+      this.mode = 'play';
+      this.save();
+      this.openDialog(null, "Rise and shine, Gus! Today's the day your adventure begins.|Look around your burrow if you like -- press E next to things to check them out. When you're ready, head out the front door at the bottom.");
+    });
+  }
+  playMovie(name, onDone) {
+    this.movie = { cs: cutscene.createCutscene(name), onDone };
+    this.mode = 'movie';
   }
   continueGame(slot = 0) {
     const s = loadSlot(slot);
@@ -159,10 +174,12 @@ export class Game {
     // a save from inside a house that no longer exists falls back to the village
     if (id.startsWith('house_') && !HOUSES[id.slice(6)]) { id = 'overworld'; pos = null; }
     this.area = id === 'overworld' ? buildOverworld()
-      : id === arena.ARENA_ID ? arena.buildArena()
-        : id.startsWith('house_') ? buildHouse(id.slice(6), this.state)
-          : buildDungeon(id, this.state.flags);
-    if (this.area.type === 'overworld') this.owRef = this.area;
+      : id === 'goo' ? endgame.buildGooLands(REGION.GOO)
+        : id === epilogue.LAGOON_ID ? epilogue.buildLagoon()
+        : id === arena.ARENA_ID ? arena.buildArena()
+          : id.startsWith('house_') ? buildHouse(id.slice(6), this.state)
+            : buildDungeon(id, this.state.flags);
+    if (this.area.id === 'overworld') this.owRef = this.area;
     buildTileAtlas(this.area.theme);
     // apply persistent cracked tiles
     for (const key of Object.keys(this.state.flags)) {
@@ -184,6 +201,7 @@ export class Game {
     this.arena = null;
     this.flash = 0.35;
     this.holdUp = null;
+    this.scene = null;
 
     const start = pos || this.area.playerStart;
     this.player = new Player(start.x, start.y);
@@ -209,9 +227,29 @@ export class Game {
         case 'building': this.ents.push(new Building(p)); break;
         case 'furniture': this.ents.push(new Furniture(p)); break;
         case 'pedestal': this.ents.push(new Pedestal(p)); break;
+        case 'barrier': if (!this.state.flags.god_armor) this.ents.push(new Barrier(p)); break;
+        case 'custom': this.ents.push(p.make()); break;      // areas built in code hand over their own entities
+        case 'cage': {
+          const c = new Cage(p);
+          c.opened = !!this.state.flags['freed_' + p.who];
+          this.ents.push(c);
+          // freed but still waiting on the other one: stays right by the cage
+          if (c.opened && !this.state.flags.parents_free) {
+            const gd = new Guardian(p.who, c.cx, c.bottom + 10);
+            gd.goal = { x: c.cx, y: c.bottom + 10 };
+            this.ents.push(gd);
+          }
+          break;
+        }
         default: this.ents.push(new Prop(p));
       }
     }
+    // a file saved mid-way through Mum and Dad building their bridge: it's finished now
+    if (this.state.flags.parents_free && !this.state.flags.bridge_built && (this.area.unbuilt || []).length) {
+      this.state.flags.bridge_built = true;
+      for (const [x, y] of this.area.unbuilt) this.area.set(x, y, T.BRIDGE);
+    }
+    endgame.spawnFamily(this);
 
     for (const sp of this.area.spawners) { sp.ent = null; sp.cd = 0; }
     this.spawnBrood();
@@ -232,7 +270,8 @@ export class Game {
     }
 
     if (this.area.type === 'overworld') {
-      this.minimap = ui.buildMinimap(this.area);
+      if (this.area.id === 'overworld') this.minimap = ui.buildMinimap(this.area);
+      else this.area.minimap = ui.buildMinimap(this.area);
       this.regionCode = -99;
     } else {
       audio.music(this.area.music);
@@ -243,6 +282,7 @@ export class Game {
     this.arena = this.area.isArena
       ? { wave: 0, phase: 'idle', t: 0, tier: this.tier(), pending: [], lastReward: null }
       : null;
+    if (this.area.onEnter) this.area.onEnter(this);
     this.snapCamera();
   }
 
@@ -259,10 +299,25 @@ export class Game {
   }
   exitDungeon() {
     audio.sfx('stairs');
-    const gk = GATE_KEYS[this.area.id];
-    const [tx, ty] = LM[gk];
-    this.loadArea('overworld', { x: tx * TILE + 8, y: (ty + 1) * TILE + 12 });
+    if (this.area.id === 'hive') {
+      // the Star Hive opens back out into the Goo Lands
+      const [tx, ty] = GOO_LM.hiveDoor;
+      this.loadArea('goo', { x: tx * TILE + 8, y: (ty + 1) * TILE + 12 });
+    } else {
+      const gk = GATE_KEYS[this.area.id];
+      const [tx, ty] = LM[gk];
+      this.loadArea('overworld', { x: tx * TILE + 8, y: (ty + 1) * TILE + 12 });
+    }
     this.mode = 'play';
+    this.save();
+  }
+  // Walking off the end of a bridge into another area (the Great Chasm's two banks).
+  travel(link) {
+    audio.sfx('stairs');
+    this.save();
+    this.loadArea(link.to, link.at || null);
+    this.mode = 'play';
+    this.regionToast = { text: this.area.name, t: 0 };
     this.save();
   }
   // Houses: walk into a front door (an HDOOR tile) to go in, onto the doormat to come out.
@@ -308,7 +363,19 @@ export class Game {
 
   // ------------------------------------------------ dungeon rooms
   roomBoundsPx(room) {
+    // dungeon rooms carry their own tile rect (some are bigger than a screen); the arena's
+    // and the houses' single rooms are one screen at the origin
+    if (room.bw) return { x: room.bx * TILE, y: room.by * TILE, w: room.bw * TILE, h: room.bh * TILE };
     return { x: room.rx * 25 * TILE, y: room.ry * 15 * TILE, w: 25 * TILE, h: 15 * TILE };
+  }
+  // Where the camera sits for Gus in a dungeon room: locked on a one-screen room, following
+  // him (and stopping at the walls) in a room bigger than the screen.
+  roomCamera(room) {
+    const b = this.roomBoundsPx(room);
+    return {
+      x: clamp(this.player.cx - VIEW_W / 2, b.x, b.x + b.w - VIEW_W),
+      y: clamp(this.player.cy - VIEW_H / 2, b.y, b.y + b.h - VIEW_H),
+    };
   }
   activateRoom(room) {
     const rk = room.rx + ',' + room.ry;
@@ -322,9 +389,9 @@ export class Game {
             this.ents.push(b);
             this.bossActive = b;
             audio.sfx('roar');
-            audio.music('boss');
+            audio.music(this.area.bossMusic || 'boss');
             this.setBanner(this.area.bossName || 'BOSS', '', '#ff9aa8');
-          } else if (!this.state.dungeonsDone[this.area.id]) {
+          } else if (!this.area.noShard && !this.state.dungeonsDone[this.area.id]) {
             this.ents.push(new Pickup(s.x, s.y, 'shard'));
           }
         } else if (s.miniboss) {
@@ -339,6 +406,9 @@ export class Game {
     } else if (room.killall) {
       this.openRoomDoors(room);
     }
+    // story doors (the jail, the Guardian Bridge) stand open once their moment has come
+    const flag = this.area.openWhen && this.area.openWhen[room.letter];
+    if (flag && this.state.flags[flag]) this.openRoomDoors(room, true);
   }
   roomEnemies(room) {
     const b = this.roomBoundsPx(room);
@@ -441,7 +511,9 @@ export class Game {
   spawnEnemy(type, x, y, opts = {}) {
     // the arena passes its own tier so waves can outscale story progress
     const t = opts.tier != null ? opts.tier : this.tier();
-    if (!opts.miniboss && !opts.elite && t >= 2 && Math.random() < 0.13 + 0.12 * (t - 2)) opts.elite = true;
+    // everything that turns up in the Goo Lands or the Star Hive has crawled out of the goo
+    if (this.area.zombies && !opts.miniboss) opts.zombie = true;
+    if (!opts.zombie && !opts.noElite && !opts.miniboss && !opts.elite && t >= 2 && Math.random() < 0.13 + 0.12 * (t - 2)) opts.elite = true;
     const e = makeEnemy(type, x, y, t, opts);
     this.ents.push(e);
     return e;
@@ -462,8 +534,17 @@ export class Game {
     this.bossActive = null;
     this.state.flags['boss_' + this.area.id] = true;
     if (this.area.id === 'nexus') {
-      this.setBanner('APEXUS IS VANQUISHED!', 'The River\'s Light returns...', '#fff6c8', () => {
+      // not the end after all: a door grinds open in the west wall of the lair
+      this.setBanner('APEXUS IS VANQUISHED!', 'But where are Mum and Dad...?', '#fff6c8', () => {
         this.state.flags.nexus_done = true;
+        audio.music(this.area.music);
+        if (this.curRoom) this.openRoomDoors(this.curRoom);
+        this.toast('A door rumbles open to the west...');
+        this.save();
+      });
+    } else if (this.area.id === 'hive') {
+      this.setBanner('XENOMANTIS IS DEFEATED!', 'The Vale is safe -- and Gus\'s family is together again!', '#9aff6a', () => {
+        this.state.flags.xeno_done = true;
         this.creditsY = 0;
         this.mode = 'victory';
         audio.music('victory');
@@ -500,6 +581,16 @@ export class Game {
       () => this.warpHome("The shard's light carries you home!"));
     this.save();
   }
+  onCrystalCollected(n = 1) {
+    const st = this.state;
+    const before = st.crystals || 0;
+    st.crystals = before + n;
+    audio.sfx('crystal');
+    if (before < CRYSTAL_GOAL && st.crystals >= CRYSTAL_GOAL && !st.flags.god_armor) {
+      this.toast(`${CRYSTAL_GOAL} god crystals! Take them to the magic altar!`);
+      audio.sfx('shard');
+    }
+  }
   onPlayerDeath() {
     this.state.hp = 0;
     audio.sfx('roar');
@@ -512,7 +603,7 @@ export class Game {
     if (this.area.isArena) {
       const [tx, ty] = LM.arenaGate;
       this.loadArea('overworld', { x: tx * TILE + 8, y: (ty + 1) * TILE + 12 });
-    } else if (this.area.type === 'dungeon') this.loadArea(this.area.id);
+    } else if (this.area.type === 'dungeon' || this.area.id === 'goo') this.loadArea(this.area.id);
     else this.loadArea('overworld', { x: 100 * TILE + 8, y: 112 * TILE + 8 });
     this.mode = 'play';
     this.save();
@@ -701,6 +792,7 @@ export class Game {
         break;
       }
       case 'npc': this.npcDialog(d); break;
+      case 'altar': endgame.altarDialog(this); break;
       case 'trinket': {
         if (this.state.flags[d.id]) { this.toast('Nothing here.'); return; }
         this.state.flags[d.id] = true;
@@ -718,14 +810,17 @@ export class Game {
   // Every puggle found so far plays in Mama's cottage, each in its own look, laid out on a
   // sunflower spiral around the middle of her rug so even all fifty read as a crowd.
   spawnBrood() {
-    this.ents = this.ents.filter(e => !(e instanceof HomePuggle));
+    // (only Mama's brood: puggles some other area placed itself, like the bay's, stay put)
+    this.ents = this.ents.filter(e => !e.isBrood);
     const c = this.area.brood;
     if (!c) return;
     const num = id => parseInt(id.split('_')[1], 10);
     const ids = Object.keys(this.state.puggles).sort((a, b) => num(a) - num(b));
     ids.forEach((id, i) => {
       const r = 16 + 7 * Math.sqrt(i), a = i * 2.39996;
-      this.ents.push(new HomePuggle(id, c.x + Math.cos(a) * r, c.y + Math.sin(a) * r * 0.55));
+      const pg = new HomePuggle(id, c.x + Math.cos(a) * r, c.y + Math.sin(a) * r * 0.55);
+      pg.isBrood = true;
+      this.ents.push(pg);
     });
   }
 
@@ -942,8 +1037,12 @@ export class Game {
             this.setBanner('SHIELD GET!', 'Hold L / C / Shift to block frontal attacks.', '#c8ccd4');
             this.save();
           });
+      } else if (st.flags.xeno_done) {
+        this.openDialog(d.name, 'The Vale sings your name, Guardian Gus -- and your mum and dad\'s too!|Rest. Fish. Eat crayfish.|You have all earned every bite.');
+      } else if (st.flags.parents_free) {
+        this.openDialog(d.name, 'Your mum and dad, home at last! I never stopped hoping.|Now go and stop that alien, Xenomantis. Its Star Hive lies in the Goo Lands, across the Great Chasm.|Enter the Nexus and take the Guardian Bridge, just inside to the west.');
       } else if (st.flags.nexus_done) {
-        this.openDialog(d.name, 'The Vale sings your name, Guardian Gus.|Rest. Fish. Eat crayfish.|You have earned every bite.');
+        this.openDialog(d.name, 'You beat APEXUS! But Gus... your parents, the River Guardians, never came home.|I always wondered if Apexus took them. Search the Nexus -- look past his lair.');
       } else if (st.shards >= 4) {
         this.openDialog(d.name, 'Four shards! The Great Gate will yield.|Beware, Apexus wears all four elements...|Light is the only thing it fears.');
       } else {
@@ -979,6 +1078,15 @@ export class Game {
       } else {
         this.openDialog(d.name, `${n} of ${KEEPSAKE_TOTAL} keepsakes so far! Here's what I've heard lately...|${rumor}`);
       }
+    } else if (d.dialog === 'dad' || d.dialog === 'mum') {
+      const lines = st.flags.xeno_done ? {
+        dad: "Home sweet home! You know, son, I think you're a better Guardian than I ever was. Don't tell your mum I said that.",
+        mum: "I heard that! ...He's right, though. We're SO proud of you, Gus.",
+      } : {
+        dad: "Your mum and I will come along whenever you head out. We're not letting you out of our sight again!",
+        mum: "Eat a crayfish before you go, sweetheart. Aliens are no match for a full tummy!",
+      };
+      this.openDialog(d.name, lines[d.dialog]);
     } else if (d.dialog === 'dot') {
       const lines = [
         "Hi Gus! Pip says you're gonna save the WHOLE Vale. Can I come? ...Mum says no.",
@@ -1055,21 +1163,15 @@ export class Game {
     switch (this.mode) {
       case 'title': this.updateTitle(); break;
       case 'files': this.updateFiles(); break;
-      case 'intro':
-        if (input.pressed('interact') || input.pressed('sword') || anyTap) {
-          this.introPage++;
-          audio.sfx('blip');
-          if (this.introPage >= ui.INTRO_PAGES.length) {
-            // a new adventure starts at home, waking up beside the bed
-            const [wx, wy] = HOUSES.gus.wake;
-            this.loadArea('house_gus', { x: wx * TILE + 8, y: wy * TILE + 8 });
-            this.mode = 'play';
-            this.save();
-            this.openDialog(null, "Rise and shine, Gus! Today's the day your adventure begins.|Look around your burrow if you like -- press E next to things to check them out. When you're ready, head out the front door at the bottom.");
-          }
+      case 'movie':
+        if (cutscene.updateCutscene(this.movie.cs, dt, input.pressed('interact') || input.pressed('sword') || anyTap, input.pressed('pause'))) {
+          const done = this.movie.onDone;
+          this.movie = null;
+          done();
         }
         break;
       case 'play': this.updatePlay(dt); break;
+      case 'scene': endgame.updateScene(this, dt); break;
       case 'roomslide': this.updateSlide(dt); break;
       case 'dialog': this.updateDialog(dt); break;
       case 'shop': this.updateShop(); break;
@@ -1094,6 +1196,8 @@ export class Game {
       case 'victory':
         this.creditsY += dt * 16;
         if (this.creditsY > ui.CREDITS.length * 16 + VIEW_H - 40 && (input.pressed('interact') || input.pressed('sword') || anyTap)) {
+          // the first time through, the story isn't quite over...
+          if (this.state.flags.xeno_done && !this.state.flags.epilogue_done) { epilogue.startEpilogue(this); break; }
           this.loadArea('overworld', { x: 100 * TILE + 8, y: 112 * TILE + 8 });
           this.mode = 'play';
           this.save();
@@ -1195,6 +1299,10 @@ export class Game {
       this.exitDungeon();
       return;
     }
+    if (here === T.PASSAGE) {
+      const link = (this.area.links || []).find(l => l.tx === ptx && l.ty === pty);
+      if (link) { this.travel(link); return; }
+    }
 
     // interact. Furniture can be several tiles wide (a shop counter is five), so it's
     // measured to its nearest edge rather than its middle.
@@ -1210,6 +1318,7 @@ export class Game {
 
     this.updateArena(dt);
     this.updateWarp(dt);
+    if (this.area.update) this.area.update(this, dt);
 
     if (input.pressed('map')) { this.mode = 'map'; audio.sfx('blip'); }
     if (input.pressed('pause')) { this.mode = 'pause'; this.menuSel = 0; this.pausePage = null; audio.sfx('blip'); }
@@ -1453,6 +1562,7 @@ export class Game {
 
   // ------------------------------------------------ warp home
   updateWarp(dt) {
+    if (this.area.noWarp) { this.warpT = 0; return; }
     if (input.down('teleport')) {
       const was = this.warpT;
       this.warpT = Math.min(TELEPORT.hold, this.warpT + dt);
@@ -1621,8 +1731,9 @@ export class Game {
         continue;
       }
 
-      // pot smashing with sword
+      // pot smashing with sword (and anything else that answers a slash, like a cage lock)
       if (e instanceof Pot && slash && aabb(slash, e.box())) e.smash(this);
+      else if (e.onSlash && slash && aabb(slash, e.box())) e.onSlash(this);
     }
   }
 
@@ -1651,8 +1762,10 @@ export class Game {
     const p = this.player;
     let active = 0;
     for (const sp of this.area.spawners) if (sp.ent && !sp.ent.dead) active++;
+    // goo pools burp up a fresh zombie sooner, and close enough to watch it climb out
+    const goo = !!this.area.zombies;
     for (const sp of this.area.spawners) {
-      if (sp.ent && sp.ent.dead) { sp.ent = null; sp.cd = 24; }
+      if (sp.ent && sp.ent.dead) { sp.ent = null; sp.cd = sp.respawn ? ZOMBIE.respawn : 24; }
       if (sp.ent) {
         if (dist(p.cx, p.cy, sp.ent.cx, sp.ent.cy) > 430) { sp.ent.dead = true; sp.ent = null; sp.cd = 2; }
         continue;
@@ -1660,8 +1773,10 @@ export class Game {
       sp.cd -= dt;
       if (sp.cd > 0 || active >= 15) continue;
       const d = dist(p.cx, p.cy, sp.x, sp.y);
-      if (d < 270 && d > 130) {
-        sp.ent = this.spawnEnemy(sp.type, sp.x, sp.y, {});
+      if (d < 270 && d > (goo ? 70 : 130)) {
+        const type = sp.types ? sp.types[Math.floor(Math.random() * sp.types.length)] : sp.type;
+        sp.ent = this.spawnEnemy(type, sp.x, sp.y, {});
+        if (goo) { this.burst(sp.x, sp.y, '#9aff6a', 10); audio.sfx('goo'); }
         active++;
       }
     }
@@ -1686,6 +1801,7 @@ export class Game {
       case REGION.EARTH: this.addParticle(x, y, '#7aa04a', 1.6, 10 + Math.random() * 8, 14, 1); break;
       case REGION.AIR: this.addParticle(x, y, '#e8f0ff', 1.1, 26, 6, 1); break;
       case REGION.CONFLUENCE: this.addParticle(x, y, '#8aa8c8', 0.5, -12, 150, 1); break;
+      case REGION.GOO: this.addParticle(x, y, Math.random() < 0.5 ? '#8aff6a' : '#c88aff', 1.8, (Math.random() - 0.5) * 6, -12, 1); break;
     }
   }
 
@@ -1696,14 +1812,21 @@ export class Game {
       this.cam.x = Math.round((this.area.w * TILE - VIEW_W) / 2);
       this.cam.y = Math.round((this.area.h * TILE - VIEW_H) / 2);
     } else if (this.area.type === 'dungeon' && this.curRoom) {
-      this.cam.x = this.curRoom.rx * VIEW_W;
-      this.cam.y = this.curRoom.ry * VIEW_H;
+      const c = this.roomCamera(this.curRoom);
+      this.cam.x = c.x;
+      this.cam.y = c.y;
     } else {
       this.cam.x = clamp(this.player.cx - VIEW_W / 2, 0, this.area.w * TILE - VIEW_W);
       this.cam.y = clamp(this.player.cy - VIEW_H / 2, 0, this.area.h * TILE - VIEW_H);
     }
   }
   updateCamera(dt) {
+    if (this.area.type === 'dungeon' && this.curRoom) {
+      const c = this.roomCamera(this.curRoom);
+      this.cam.x = lerp(this.cam.x, c.x, Math.min(1, dt * 10));
+      this.cam.y = lerp(this.cam.y, c.y, Math.min(1, dt * 10));
+      return;
+    }
     if (this.area.type !== 'overworld') { this.snapCamera(); return; }
     const tx = clamp(this.player.cx - VIEW_W / 2, 0, this.area.w * TILE - VIEW_W);
     const ty = clamp(this.player.cy - VIEW_H / 2, 0, this.area.h * TILE - VIEW_H);
@@ -1711,10 +1834,11 @@ export class Game {
     this.cam.y = lerp(this.cam.y, ty, Math.min(1, dt * 8));
   }
   startSlide(room) {
+    const to = this.roomCamera(room);
     this.slide = {
       t: 0,
-      fromX: this.curRoom.rx * VIEW_W, fromY: this.curRoom.ry * VIEW_H,
-      toX: room.rx * VIEW_W, toY: room.ry * VIEW_H,
+      fromX: this.cam.x, fromY: this.cam.y,
+      toX: to.x, toY: to.y,
       room,
     };
     this.mode = 'roomslide';
@@ -1739,6 +1863,7 @@ export class Game {
       }
       this.slide = null;
       this.mode = 'play';
+      endgame.regroupFamily(this);
       // after mode is restored: activateRoom may itself switch mode (boss banner)
       this.activateRoom(s.room);
     }
@@ -1839,7 +1964,7 @@ export class Game {
     if (!DEBUG) return;
     const st = this.state;
     if (input.pressed('dbgGear')) {
-      st.sword = Math.max(st.sword, MAX_LEVEL); st.shield = MAX_LEVEL; st.bow = MAX_LEVEL; st.armor = MAX_LEVEL;
+      st.sword = Math.max(st.sword, MAX_LEVEL); st.shield = MAX_LEVEL; st.bow = MAX_LEVEL; st.armor = Math.max(st.armor, MAX_LEVEL);
       for (const t of ARROW_TYPES) { st.arrows.types[t].owned = true; st.arrows.types[t].level = MAX_LEVEL; }
       st.quiver = MAX_LEVEL;
       st.arrows.cap = AMMO_CAPS[MAX_LEVEL]; st.arrows.ammo = st.arrows.cap;
@@ -1847,13 +1972,25 @@ export class Game {
       this.toast('DEBUG: full gear');
     }
     if (input.pressed('dbgWarp')) {
-      const spots = [[100, 112], LM.fireGate, LM.waterGate, LM.airGate, LM.earthGate, [100, 40], LM.nexusGate];
-      const [tx, ty] = spots[this.dbgWarp % spots.length];
+      const spots = [[100, 112], LM.fireGate, LM.waterGate, LM.airGate, LM.earthGate, [100, 40], LM.nexusGate, 'goo'];
+      const spot = spots[this.dbgWarp % spots.length];
       this.dbgWarp++;
-      if (this.area.type !== 'overworld') this.loadArea('overworld');
-      this.player.x = tx * TILE + 2; this.player.y = (ty + 1) * TILE + 4;
+      if (spot === 'goo') this.loadArea('goo');
+      else {
+        const [tx, ty] = spot;
+        if (this.area.id !== 'overworld') this.loadArea('overworld');
+        this.player.x = tx * TILE + 2; this.player.y = (ty + 1) * TILE + 4;
+        for (const e of this.ents) if (e instanceof Guardian) e.catchUp(this);
+      }
       this.snapCamera();
       this.toast('DEBUG: warp ' + this.dbgWarp);
+    }
+    if (input.pressed('dbgCrystals')) { this.onCrystalCollected(100); this.toast('DEBUG: +100 god crystals'); }
+    // jump straight to the Goo Lands with Apexus beaten and Mum and Dad free
+    if (input.pressed('dbgEndgame')) {
+      Object.assign(st.flags, { boss_nexus: true, nexus_done: true, freed_dad: true, freed_mum: true, parents_free: true, bridge_built: true });
+      this.loadArea('goo');
+      this.toast('DEBUG: endgame');
     }
     if (input.pressed('dbgHeal')) { st.hp = st.maxHp; this.toast('DEBUG: healed'); }
     if (input.pressed('dbgRich')) { st.coins += 500; st.diamonds += 50; this.toast('DEBUG: rich'); }
@@ -1886,7 +2023,7 @@ export class Game {
 
     if (this.mode === 'title') { ui.drawTitle(this, ctx); return; }
     if (this.mode === 'files') { ui.drawFiles(this, ctx); return; }
-    if (this.mode === 'intro') { ui.drawIntro(this, ctx); return; }
+    if (this.mode === 'movie') { cutscene.drawCutscene(ctx, this.movie.cs, this.time); return; }
     if (this.mode === 'victory') { ui.drawVictory(this, ctx); return; }
     if (!this.area) return;
 
@@ -1983,7 +2120,7 @@ export class Game {
     if (this.area.type === 'house') {
       tint = 'rgba(255,190,120,0.06)';   // lamplight
     } else if (this.area.type === 'dungeon') {
-      tint = { fire: 'rgba(255,90,30,0.06)', water: 'rgba(40,140,220,0.08)', air: 'rgba(200,220,255,0.05)', earth: 'rgba(90,140,40,0.05)', nexus: 'rgba(140,80,220,0.10)' }[this.area.theme];
+      tint = { fire: 'rgba(255,90,30,0.06)', water: 'rgba(40,140,220,0.08)', air: 'rgba(200,220,255,0.05)', earth: 'rgba(90,140,40,0.05)', nexus: 'rgba(140,80,220,0.10)', hive: 'rgba(60,200,80,0.08)' }[this.area.theme];
     } else {
       switch (this.regionCode) {
         case REGION.FIRE: tint = 'rgba(255,100,40,0.07)'; break;
@@ -1991,6 +2128,7 @@ export class Game {
         case REGION.AIR: tint = 'rgba(210,230,255,0.06)'; break;
         case REGION.WATER: tint = 'rgba(60,180,240,0.05)'; break;
         case REGION.CONFLUENCE: tint = 'rgba(30,30,70,0.22)'; break;
+        case REGION.GOO: tint = 'rgba(70,30,110,0.14)'; break;
       }
     }
     if (tint) { ctx.fillStyle = tint; ctx.fillRect(0, 0, VIEW_W, VIEW_H); }

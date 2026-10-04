@@ -1,6 +1,6 @@
 // Player, projectiles, pickups, chests, props, push blocks.
 import { TILE, PLAYER, SWORD_LOOK, SWORD_DMG, SHIELD_LOOK, ARMOR_REDUCE, SHIELD_ARC, SHIELD_SLOW, BOW_COOLDOWN, BOW_POWER,
-  ARROWS, BURN, FREEZE_TIME, CHAIN_TARGETS, BOMB_RADIUS, CRAYFISH_HEAL, DROPS, SPRINT, GOD_SWORD_LV, GOD_BEAM, KEEPSAKE_BY_ID, tierCoins } from './config.js';
+  ARROWS, BURN, FREEZE_TIME, CHAIN_TARGETS, BOMB_RADIUS, CRAYFISH_HEAL, DROPS, SPRINT, GOD_SWORD_LV, GOD_BEAM, KEEPSAKE_BY_ID, CRYSTAL_GOAL, tierCoins } from './config.js';
 import { clamp, aabb, dist, dirTo, DIRS } from './util.js';
 import { T, props as tileProps } from './tiles.js';
 import { drawSprite, sprites, frameName, PUGGLE_ACCESSORIES } from './pixelart.js';
@@ -35,7 +35,7 @@ export class Entity {
 export function walkable(id, e) {
   const p = tileProps(id);
   if (e.fly) return !p.solid;
-  if (p.solid || p.lava) return false;
+  if (p.solid || p.lava || p.pit) return false;
   if (e.deepOnly) return !!p.deep;   // dolphins keep to water they can actually swim in
   if (p.deep) return !!(e.swims || e.aquatic);
   if (e.aquatic) return !!(p.deep || p.water);
@@ -440,7 +440,8 @@ export class Arrow extends Entity {
     const tx = Math.floor(this.cx / TILE), ty = Math.floor(this.cy / TILE);
     const id = g.area.get(tx, ty);
     const p = tileProps(id);
-    if (id === T.EYE) { g.triggerEye(tx, ty); this.die(g, true); return; }
+    // Mum's arrows (`friendly`) glance off eye switches rather than tripping Gus's puzzles
+    if (id === T.EYE) { if (!this.friendly) g.triggerEye(tx, ty); this.die(g, true); return; }
     if (p.solid) { this.die(g, true); return; }
     if (this.left <= 0) { this.die(g, this.type === 'bomb'); return; }
     if (this.type === 'fire' && Math.random() < 0.3) g.addParticle(this.cx, this.cy, '#ff8a3a', 0.3);
@@ -458,6 +459,7 @@ export class Arrow extends Entity {
     this.hitIds.add(e.id);
     let dmg = ARROWS[this.type].dmg(this.level);
     if (this.type === 'light') { dmg = e.isBoss ? dmg * 2 : dmg; }
+    if (this.dmgMul && e.isBoss) dmg = Math.max(1, Math.round(dmg * this.dmgMul));
     e.hurt(g, dmg, this.cx, this.cy);
     if (this.type === 'fire') { e.burnT = BURN.ticks * BURN.interval; audio.sfx('burn'); }
     if (this.type === 'ice') { e.frozenT = FREEZE_TIME + this.level * 0.4; audio.sfx('freeze'); }
@@ -545,7 +547,7 @@ export class EnemyShot extends Entity {
     super(x - 3, y - 3, 6, 6);
     this.team = 'enemy';
     this.vx = vx; this.vy = vy;
-    this.kind = kind;    // fireball | zap | feather | rock | spit | bomblet
+    this.kind = kind;    // fireball | zap | feather | rock | spit | bomblet | goo
     this.isShot = true;
     this.dmg = dmg;
     this.life = kind === 'bomblet' ? 1.1 : 2.6;
@@ -564,9 +566,10 @@ export class EnemyShot extends Entity {
       return;
     }
     if (this.kind === 'fireball' && Math.random() < 0.4) g.addParticle(this.cx, this.cy, '#ff8a3a', 0.25);
+    if (this.kind === 'goo' && Math.random() < 0.3) g.addParticle(this.cx, this.cy, '#4fa83a', 0.3, 0, 12, 1);
   }
   color() {
-    return { fireball: '#ff7a30', zap: '#ffe95c', feather: '#d8e0f0', rock: '#9a928a', spit: '#7ad4ff', bomblet: '#4a4a5a' }[this.kind] || '#fff';
+    return { fireball: '#ff7a30', zap: '#ffe95c', feather: '#d8e0f0', rock: '#9a928a', spit: '#7ad4ff', bomblet: '#4a4a5a', goo: '#8aff6a' }[this.kind] || '#fff';
   }
   draw(g, ctx) {
     ctx.fillStyle = this.color();
@@ -576,7 +579,13 @@ export class EnemyShot extends Entity {
     } else if (this.kind === 'bomblet') {
       drawSprite(ctx, 'bomb', this.cx, this.cy + 4);
     } else {
-      ctx.beginPath(); ctx.arc(this.cx, this.cy, this.kind === 'rock' ? 4 : 3, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.arc(this.cx, this.cy, this.kind === 'rock' || this.kind === 'goo' ? 4 : 3, 0, 7); ctx.fill();
+      if (this.kind === 'goo') {
+        ctx.fillStyle = '#2e6e22';
+        ctx.fillRect(this.cx - 1, this.cy + 1, 3, 2);
+        ctx.fillStyle = '#e0ffb8';
+        ctx.fillRect(this.cx - 2, this.cy - 2, 2, 2);
+      }
       if (this.kind === 'fireball' || this.kind === 'zap') {
         ctx.fillStyle = '#fff8d0';
         ctx.fillRect(this.cx - 1, this.cy - 1, 2, 2);
@@ -586,7 +595,7 @@ export class EnemyShot extends Entity {
 }
 
 // ---------------------------------------------------------------- PICKUPS
-const PICKUP_SPRITES = { coin: 'coin', diamond: 'diamond', crayfish: 'crayfish', arrows: 'arrows', shard: 'shard' };
+const PICKUP_SPRITES = { coin: 'coin', diamond: 'diamond', crayfish: 'crayfish', arrows: 'arrows', shard: 'shard', crystal: 'godcrystal' };
 export class Pickup extends Entity {
   constructor(x, y, kind, amount = 1) {
     super(x - 4, y - 4, 8, 8);
@@ -595,7 +604,8 @@ export class Pickup extends Entity {
     this.vy = -Math.random() * 40 - 20;
     this.z = 0; this.vz = 60 + Math.random() * 40;
     this.age = 0;
-    this.life = kind === 'shard' ? Infinity : 14;
+    // god crystals hang about longer: a zombie drops a whole handful at once
+    this.life = kind === 'shard' ? Infinity : kind === 'crystal' ? 30 : 14;
   }
   update(g, dt) {
     this.age += dt; this.life -= dt;
@@ -608,7 +618,7 @@ export class Pickup extends Entity {
       // magnet toward player
       const p = g.player;
       const d = dist(this.cx, this.cy, p.cx, p.cy);
-      if (d < 40) {
+      if (d < (this.kind === 'crystal' ? 64 : 40)) {
         const [dx, dy] = dirTo(this.cx, this.cy, p.cx, p.cy);
         const pull = this.kind === 'shard' ? 0 : 140;
         this.x += dx * pull * dt; this.y += dy * pull * dt;
@@ -633,8 +643,9 @@ export class Pickup extends Entity {
         audio.sfx('blip');
         break;
       case 'shard': g.onShardCollected(); break;
+      case 'crystal': g.onCrystalCollected(this.amount); break;
     }
-    g.burst(this.cx, this.cy, this.kind === 'diamond' ? '#6ae0f0' : this.kind === 'shard' ? '#fff' : '#f0c83a', 5);
+    g.burst(this.cx, this.cy, this.kind === 'diamond' ? '#6ae0f0' : this.kind === 'shard' ? '#fff' : this.kind === 'crystal' ? '#9aff6a' : '#f0c83a', 5);
   }
   draw(g, ctx) {
     const bob = Math.sin(g.time * 4 + this.id) * 1.5;
@@ -725,7 +736,7 @@ export class PushBlock extends Entity {
     const ntx = Math.floor(this.x / TILE) + dx, nty = Math.floor(this.y / TILE) + dy;
     const id = g.area.get(ntx, nty);
     const p = tileProps(id);
-    if (p.solid || p.deep || p.lava || p.dmg) return;
+    if (p.solid || p.deep || p.lava || p.dmg || p.pit) return;
     for (const s of g.solidEnts) if (s !== this && !s.dead && aabb({ x: ntx * TILE, y: nty * TILE, w: 16, h: 16 }, s.box())) return;
     this.sliding = { tx: ntx * TILE, ty: nty * TILE };
     audio.sfx('door');
@@ -1121,6 +1132,11 @@ export class Building extends Entity {
     this.smokeT = 0;
   }
   update(g, dt) {
+    // the Star Hive breathes out glowing spores
+    if (this.def.spores && Math.random() < dt * 6) {
+      g.addParticle(this.x + 16 + Math.random() * (this.w - 32), this.bottom - 20 - Math.random() * 70,
+        Math.random() < 0.5 ? '#8aff6a' : '#c88aff', 1.6, (Math.random() - 0.5) * 10, -16, 1);
+    }
     if (!this.def.smoke || (this.smokeT -= dt) > 0) return;
     this.smokeT = 0.35 + Math.random() * 0.3;
     // a lazy puff from the burrow's chimney pipe (at x 58 of its 80px sprite)
@@ -1135,7 +1151,7 @@ export class Building extends Entity {
 }
 
 // ---------------------------------------------------------------- PROPS (sign/npc/statue/shrine/gate/dungeon entrance)
-const PROP_SPRITES = { sign: 'sign', statue: 'statue', shrine: 'shrine', gate: 'gate', gong: 'gong' };
+const PROP_SPRITES = { sign: 'sign', statue: 'statue', shrine: 'shrine', gate: 'gate', gong: 'gong', altar: 'altar' };
 export class Prop extends Entity {
   constructor(def) {
     const px = def.tx * TILE, py = def.ty * TILE;
@@ -1167,6 +1183,17 @@ export class Prop extends Entity {
     }
     // the gate is masonry set into the wall, so it aligns to the tile grid exactly
     drawSprite(ctx, PROP_SPRITES[this.kind], this.cx, this.bottom + (this.kind === 'gate' ? 0 : 2));
+    if (this.kind === 'altar') {
+      // the god crystal hovering over the altar burns brighter the closer Gus is to the goal
+      const full = g.state.flags.god_armor || (g.state.crystals || 0) >= CRYSTAL_GOAL;
+      const bob = Math.sin(g.time * 2.4) * 2;
+      ctx.save();
+      ctx.globalAlpha = (full ? 0.45 : 0.22) + 0.12 * Math.sin(g.time * 5);
+      ctx.fillStyle = '#9aff6a';
+      ctx.beginPath(); ctx.arc(this.cx, this.y - 12 + bob, full ? 11 : 7, 0, 7); ctx.fill();
+      ctx.restore();
+      drawSprite(ctx, 'godcrystal', this.cx, this.y - 7 + bob);
+    }
     if (this.kind === 'shrine') {
       ctx.save();
       ctx.globalAlpha = 0.4 + 0.2 * Math.sin(g.time * 3);

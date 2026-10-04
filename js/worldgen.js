@@ -4,8 +4,9 @@ import { rng, irand, choose, clamp, dist } from './util.js';
 import { T, isSolid, props } from './tiles.js';
 import { HOUSES } from './houses.js';
 
-export const REGION = { MARSH: 0, FIRE: 1, WATER: 2, AIR: 3, EARTH: 4, CONFLUENCE: 5, VILLAGE: 6 };
-export const REGION_KEYS = ['marsh', 'fire', 'water', 'air', 'earth', 'confluence', 'village'];
+// GOO is the Goo Lands, a separate area past the Great Chasm (endgame.js), never part of the Vale
+export const REGION = { MARSH: 0, FIRE: 1, WATER: 2, AIR: 3, EARTH: 4, CONFLUENCE: 5, VILLAGE: 6, GOO: 7 };
+export const REGION_KEYS = ['marsh', 'fire', 'water', 'air', 'earth', 'confluence', 'village', 'goo'];
 
 // landmark tile coordinates
 export const LM = {

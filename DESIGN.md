@@ -12,6 +12,10 @@ relics — rose from the four corners of the Vale. Each guards a shard of the Co
 Gus takes up his rusty sword to win back the shards, unlock the Confluence, and face the
 Primal Chimera.
 
+The opening cutscene tells the rest: Gus's **Mum and Dad**, the River Guardians, fought
+**Xenomantis**, a giant alien mantis that fell out of the stars, and lost. She gave them to
+Apexus, who locked them in the Nexus. Beating Apexus is no longer the end — see **Endgame**.
+
 ## Player: Gus
 
 - Always rendered **standing upright** (Cat Quest style) on a top-down world.
@@ -385,6 +389,47 @@ that gives the shop and shrine economies somewhere to draw from once the overwor
 - Six-second breather between waves: take the stairs to cash out, or ring the gong to rush
   the next one. Best wave persists per save file.
 
+## Endgame: past Apexus
+
+Designed by Gus's biggest fan (age 9). All of it lives in [js/endgame.js](js/endgame.js),
+with its art in [js/endart.js](js/endart.js) and the opening cutscene in
+[js/cutscene.js](js/cutscene.js).
+
+1. **The jail.** Apexus's death opens a door in the west wall of his lair into room J: Mum
+   and Dad in cages. A slash or E breaks each lock. Their half-built bridge spans the Great
+   Chasm (a bottomless pit) in the same room; once both are free they hammer the rest of it
+   across in a short scene (`mode: 'scene'`).
+2. **Mum and Dad** follow Gus everywhere but indoors, and are home in his burrow when he
+   goes in. They can't be hurt and enemies ignore them. Dad fights up close with his sword,
+   Mum shoots arrows from range and tosses Gus a crayfish when he's low. They path-find
+   (tile BFS) and pop back beside Gus when left behind. Against bosses they deal
+   `FAMILY.bossMul` damage: the boss is Gus's job.
+3. **The Goo Lands**, past the bridge: a separate 64×48 outdoor area. Fourteen goo pools
+   burp up **zombies** — every regular (non-aquatic) enemy type, rot-green with glowing eyes,
+   `ZOMBIE.hpMul`× health and doubled-plus damage. Each drops 5 **god crystals**.
+4. **The magic altar** in the middle trades 300 crystals for **God Armor** (armor tier 7,
+   12 damage off every hit) for Gus — and Mum and Dad wear it too, and hit harder.
+5. **The Star Hive**: God Armor drops the force field over its door. Inside, just an entry
+   hall and a grand staircase over the abyss up to **Xenomantis**, in an arena a screen and a
+   half each way (the camera follows Gus inside it; four pillars to duck behind). She has
+   2.25× Apexus's health; through God Armor a bump costs about 4½ hearts and a goo ball 2
+   (`XENO` in config.js; first built at 3× health and 5× damage, then toned down on request).
+   Scythe dashes, goo fans, leaps that slam down where her shadow was, wing-buzz spirals, and
+   a brood of zombies at 2/3 and 1/3 health. Beating her rolls the credits.
+6. **The Guardian Bridge** (Nexus room K, off the entry hall) is a shortcut back to the Goo
+   Lands once the bridge is built.
+
+7. **After the credits** ([js/epilogue.js](js/epilogue.js)), the first time only: a movie of
+   peace in the Vale (Mum and Dad fishing, Gus playing with the puggles) until someone cries
+   for help out on the water. Then it's playable: Billabong Bay, a one-screen beach, where
+   two waves of reef sharks chase a dolphin. Sharks lunge into the shallows at Gus, so that's
+   where he can fight them. The dolphin is **Flipper**, who brings the news that the world is
+   under attack by **MECHA APEXUS** — a second movie, then TO BE CONTINUED, then home.
+
+Flags: `freed_dad`, `freed_mum`, `parents_free`, `bridge_built`, `god_armor`, `xeno_done`, `epilogue_done`
+(plus the existing `boss_nexus`/`nexus_done`). New state: `crystals`. Old saves that had
+already "beaten the game" simply find the jail door open next time they visit Apexus's lair.
+
 ## Tech
 
 - Vanilla JS ES modules, HTML5 Canvas 2D, zero dependencies, no build step.
@@ -404,7 +449,9 @@ that gives the shop and shrine economies somewhere to draw from once the overwor
 
 Open with `?debug=1` for cheats: F1 = unlock all gear, F2 = warp between dungeons,
 F3 = full heal, F4 = +500 coins/+50 diamonds, F5 = find all puggles but one (again for the
-last, which grants the God Sword), F6 = find every keepsake (again to clear them), G = god mode.
+last, which grants the God Sword), F6 = find every keepsake (again to clear them), F7 = +100
+god crystals, F8 = jump to the Goo Lands with Apexus beaten and Mum and Dad free, G = god mode.
+F2's warp list ends with the Goo Lands.
 
 ## File map
 
@@ -424,7 +471,11 @@ last, which grants the God Sword), F6 = find every keepsake (again to clear them
 | `js/houseart.js` | furniture, keepsake and housemate art, plus the painted burrow and cottage |
 | `js/tiles.js` | tile ids, defs, procedural tile atlas |
 | `js/worldgen.js` | seeded overworld builder (regions, village, roads, spawners, props) |
-| `js/dungeons.js` | 5 dungeons authored as ASCII rooms + parser |
+| `js/dungeons.js` | 6 dungeons authored as ASCII rooms + parser |
+| `js/endgame.js` | Mum and Dad, cages, the bridge scene, the altar, the Goo Lands map |
+| `js/endart.js` | endgame art: God Armor, Mum and Dad, zombies, Xenomantis, the Hive |
+| `js/cutscene.js` | the movies: the opening, and the after-credits rescue and cliffhanger |
+| `js/epilogue.js` | after the credits: Billabong Bay, the shark fight, Flipper |
 | `js/houses.js` | the six house interiors (ASCII rooms + furniture) and where their doors are |
 | `js/entities.js` | player, projectiles, pickups, chests, NPCs, blocks, keepsakes, furniture |
 | `js/enemies.js` | enemy AI archetypes, types, minibosses, bosses |

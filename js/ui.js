@@ -1,7 +1,7 @@
 // HUD, title screen, dialogs, shop, shrine, map, pause, banners, death, credits.
 import { VIEW_W, VIEW_H, ARROW_TYPES, ARROWS, UPGRADE_TRACKS, CONSUMABLES, MAX_LEVEL,
   ARROW_UP_BASE, ARROW_UP_STEP, ARROW_UP_DESC, VESSEL_COSTS, REGION_NAMES, TELEPORT, SPRINT, SIDE_QUESTS,
-  GOD_SWORD_LV, PUGGLE_TOTAL, KEEPSAKE_TOTAL } from './config.js';
+  GOD_SWORD_LV, PUGGLE_TOTAL, KEEPSAKE_TOTAL, GOD_ARMOR_LV, CRYSTAL_GOAL } from './config.js';
 import { clamp } from './util.js';
 import { drawSprite } from './pixelart.js';
 import { drawText, textWidth } from './font.js';
@@ -60,15 +60,20 @@ export function drawHUD(g, ctx) {
   const dx = 17 + textWidth(String(st.coins), 1) + 11;
   drawSprite(ctx, 'diamond', dx, row2 + 7);
   text(ctx, String(st.diamonds), dx + 7, row2, { color: '#7ae0f0' });
-  // shards
+  // shards, and in their place once Apexus is beaten, god crystals toward the God Armor
+  const sx = dx + 7 + textWidth(String(st.diamonds), 1) + 12;
   if (st.shards > 0 && !st.flags.nexus_done) {
-    const sx = dx + 7 + textWidth(String(st.diamonds), 1) + 12;
     for (let i = 0; i < 4; i++) {
       ctx.save();
       ctx.globalAlpha = i < st.shards ? 1 : 0.13;
       drawSprite(ctx, 'shard', sx + i * 8, row2 + 8);
       ctx.restore();
     }
+  } else if (st.flags.bridge_built && (!st.flags.god_armor || st.crystals > 0)) {
+    drawSprite(ctx, 'godcrystal', sx, row2 + 8);
+    const n = st.crystals || 0, ready = n >= CRYSTAL_GOAL && !st.flags.god_armor;
+    text(ctx, st.flags.god_armor ? String(n) : `${n}/${CRYSTAL_GOAL}`, sx + 6, row2,
+      { color: ready ? (Math.floor(g.time * 4) % 2 ? '#ffd84a' : '#9aff6a') : '#9aff6a' });
   }
   // stamina: only on screen while it's below full, so the HUD stays clean at rest
   const sp = g.sprint;
@@ -279,12 +284,12 @@ function drawFileCard(g, ctx, r, st, selected) {
     ctx.restore();
   }
   // sits on the gear row, clear of the erase button in the top-right corner
-  if (st.flags && st.flags.nexus_done) text(ctx, 'CLEARED', r.x + 296, r.y + 21, { size: 7, color: '#c88aff' });
+  if (st.flags && st.flags.xeno_done) text(ctx, 'CLEARED', r.x + 296, r.y + 21, { size: 7, color: '#9aff6a' });
 
   // ---- row 2: gear levels
   let gx = r.x + 48;
   for (const [name, lv] of [['Sword', st.sword], ['Shield', st.shield], ['Bow', st.bow], ['Armor', st.armor]]) {
-    const on = (lv || 0) > 0, god = name === 'Sword' && lv >= GOD_SWORD_LV;
+    const on = (lv || 0) > 0, god = name === 'Sword' ? lv >= GOD_SWORD_LV : name === 'Armor' && lv >= GOD_ARMOR_LV;
     text(ctx, name + ' ' + (god ? 'GOD' : on ? 'L' + lv : '-'), gx, r.y + 21,
       { size: 7, color: god ? '#ffd84a' : on ? '#d8e0c8' : '#5a626c' });
     gx += textWidth(name + ' L0', 1) + 12;
@@ -363,21 +368,6 @@ export function drawFiles(g, ctx) {
     drawTapButton(ctx, r.no, 'KEEP', '#a8d8c0');
     if (!touch.enabled) text(ctx, 'E: erase   Esc: keep', VIEW_W / 2, 168, { size: 7, align: 'center', alpha: 0.8 });
   }
-}
-
-// ---------------------------------------------------------------- INTRO
-export const INTRO_PAGES = [
-  'Long ago, the rivers of BILLABONG VALE\nflowed bright with the River\'s Light,\nand platypus folk fished in peace.',
-  'Then the ELEMENTAL FANGS rose --\nancient predators twisted by shattered\nrelics of Fire, Water, Air and Earth.\n\nThey seized the four Key Shards and\nsealed the sacred Confluence.',
-  'Now the last River Guardian must take\nup his father\'s rusty sword...\n\nA platypus named GUS.',
-];
-export function drawIntro(g, ctx) {
-  ctx.fillStyle = '#0a0e12';
-  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-  const page = INTRO_PAGES[g.introPage] || '';
-  const lines = page.split('\n');
-  lines.forEach((l, i) => text(ctx, l, VIEW_W / 2, 60 + i * 13, { size: 9, align: 'center', color: '#d8e0e8' }));
-  text(ctx, touch.enabled ? '- TAP -' : '- E -', VIEW_W / 2, VIEW_H - 30, { size: 8, align: 'center', alpha: 0.6 + 0.4 * Math.sin(g.time * 4) });
 }
 
 // ---------------------------------------------------------------- DIALOG
@@ -515,6 +505,11 @@ function tileMapColor(id) {
   else if ([T.CLIFF, T.ROCK, T.MESA].includes(id)) c = '#7a6a58';
   else if ([T.STORMGRASS, T.STORMROCK, T.DEADTREE].includes(id)) c = '#3c5244';
   else if ([T.FENCE, T.WALL, T.ROOF, T.HDOOR, T.WINDOW, T.SHOPWALL, T.BUILDING].includes(id)) c = '#a8503a';
+  else if ([T.XSOIL, T.XSOIL2, T.XPLANT].includes(id)) c = '#5a4a6e';
+  else if ([T.XROCK, T.XSPIRE, T.XCLIFF].includes(id)) c = '#352a44';
+  else if (id === T.GOO) c = '#6ad04a';
+  else if (id === T.PIT || id === T.PASSAGE) c = '#07050c';
+  else if (id === T.STAIRS) c = '#c88aff';
   MAP_COLORS[id] = c;
   return c;
 }
@@ -550,7 +545,8 @@ export function drawMap(g, ctx) {
       [168, 176, g.state.dungeonsDone.water ? '#8a8278' : '#7ad4ff', 'Water'],
       [26, 24, g.state.dungeonsDone.air ? '#8a8278' : '#e8f0ff', 'Air'],
       [30, 172, g.state.dungeonsDone.earth ? '#8a8278' : '#a8d84a', 'Earth'],
-      [100, 14, g.state.flags.nexus_done ? '#8a8278' : '#c88aff', 'Nexus'],
+      // the Nexus stays lit past Apexus: the Guardian Bridge to the Goo Lands starts inside it
+      [100, 14, g.state.flags.xeno_done ? '#8a8278' : '#c88aff', 'Nexus'],
     ];
     for (const [tx, ty, color] of marks) {
       const [px, py] = pt(tx, ty);
@@ -587,14 +583,7 @@ export function drawMap(g, ctx) {
     // legend
     const lx = mx + 100 * scale + 14;
     text(ctx, 'QUEST', lx, 30, { size: 8, color: '#f0c83a' });
-    const q = [
-      ['Fire Shard', g.state.dungeonsDone.fire], ['Water Shard', g.state.dungeonsDone.water],
-      ['Air Shard', g.state.dungeonsDone.air], ['Earth Shard', g.state.dungeonsDone.earth],
-      ['Open the Gate', g.state.flags.gate_open], ['Defeat Apexus', g.state.flags.nexus_done],
-    ];
-    q.forEach(([label, done], i) => {
-      text(ctx, (done ? '[x] ' : '[ ] ') + label, lx, 44 + i * 12, { size: 7, color: done ? '#8a8278' : '#f0ead8' });
-    });
+    drawQuestList(g, ctx, lx, 44);
     text(ctx, 'SIDE QUESTS', lx, 122, { size: 8, color: '#ff8ad0' });
     Object.values(SIDE_QUESTS).forEach((sq, i) => {
       const s = g.questState(sq.id);
@@ -608,6 +597,8 @@ export function drawMap(g, ctx) {
     const keeps = g.keepsakeCount(), allKeeps = keeps >= KEEPSAKE_TOTAL;
     drawSprite(ctx, 'ks_trophy', lx + 5, 212);
     text(ctx, `KEEPSAKES  ${keeps} / ${KEEPSAKE_TOTAL}`, lx + 13, 204, { size: 8, color: allKeeps ? '#ffd84a' : '#f0d890' });
+  } else if (g.area.id === 'goo' && g.area.minimap) {
+    drawGooMap(g, ctx);
   } else if (g.area.isArena) {
     text(ctx, 'THE CRUCIBLE', VIEW_W / 2, 20, { size: 12, align: 'center', color: '#f0c83a' });
     const A = g.arena || { wave: 0 };
@@ -632,7 +623,7 @@ export function drawMap(g, ctx) {
     for (const k of keys) {
       const [rx, ry] = k.split(',').map(Number);
       const room = g.area.rooms[k];
-      const visited = g.visitedRooms.has(k);
+      const visited = g.visitedRooms.has(room.rx + ',' + room.ry);   // a big room's cells share its first one
       const x = ox + (rx - minx) * cell, y = oy + (ry - miny) * cell;
       ctx.fillStyle = visited ? '#3a4a5a' : '#1a2028';
       ctx.fillRect(x, y, cell - 3, cell - 3);
@@ -653,6 +644,58 @@ export function drawMap(g, ctx) {
   } else {
     text(ctx, 'M / Esc: close', VIEW_W / 2, VIEW_H - 22, { size: 7, align: 'center', alpha: 0.8 });
   }
+}
+
+// The main quest, six lines at a time: the shards and Apexus, then (once Apexus falls) the
+// road to Xenomantis.
+function drawQuestList(g, ctx, lx, y0) {
+  const st = g.state, f = st.flags;
+  const q = !f.nexus_done ? [
+    ['Fire Shard', st.dungeonsDone.fire], ['Water Shard', st.dungeonsDone.water],
+    ['Air Shard', st.dungeonsDone.air], ['Earth Shard', st.dungeonsDone.earth],
+    ['Open the Gate', f.gate_open], ['Defeat Apexus', f.nexus_done],
+  ] : [
+    ['Defeat Apexus', true], ['Free Mum and Dad', f.parents_free], ['Cross the Chasm', f.bridge_built],
+    [f.god_armor ? 'God crystals' : `God crystals ${Math.min(st.crystals || 0, CRYSTAL_GOAL)}/${CRYSTAL_GOAL}`, f.god_armor || (st.crystals || 0) >= CRYSTAL_GOAL],
+    ['Forge God Armor', f.god_armor], ['Defeat Xenomantis', f.xeno_done],
+  ];
+  q.forEach(([label, done], i) => {
+    text(ctx, (done ? '[x] ' : '[ ] ') + label, lx, y0 + i * 12, { size: 7, color: done ? '#8a8278' : '#f0ead8' });
+  });
+}
+
+function drawGooMap(g, ctx) {
+  const A = g.area, scale = 5.2;
+  const mx = 24, my = 30;
+  text(ctx, 'THE GOO LANDS', mx + A.w / 4 * scale, 14, { size: 9, align: 'center', color: '#9aff6a' });
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(A.minimap, mx, my, A.w / 2 * scale, A.h / 2 * scale);
+  ctx.restore();
+  const pt = (tx, ty) => [mx + tx / 2 * scale, my + ty / 2 * scale];
+  const mark = (tx, ty, color) => {
+    const [px, py] = pt(tx, ty);
+    ctx.fillStyle = color; ctx.fillRect(px - 2, py - 2, 5, 5);
+    ctx.strokeStyle = '#101418'; ctx.strokeRect(px - 2.5, py - 2.5, 6, 6);
+  };
+  mark(32, 27, '#ffd84a');                                  // the altar
+  mark(32, 7, g.state.flags.god_armor ? '#c88aff' : '#6a5a7a');   // the Hive
+  mark(63, 23.5, '#c49e70');                                // the bridge home
+  if (Math.floor(g.time * 3) % 2 === 0) {
+    const [px, py] = pt(g.player.cx / 16, g.player.cy / 16);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(px - 1.5, py - 1.5, 4, 4);
+  }
+  const lx = mx + A.w / 2 * scale + 14;
+  text(ctx, 'QUEST', lx, 30, { size: 8, color: '#f0c83a' });
+  drawQuestList(g, ctx, lx, 44);
+  const keys = [['#ffd84a', 'Magic altar'], ['#c88aff', 'Star Hive'], ['#c49e70', 'Bridge home']];
+  keys.forEach(([c, label], i) => {
+    ctx.fillStyle = c; ctx.fillRect(lx, 128 + i * 12, 5, 5);
+    text(ctx, label, lx + 9, 127 + i * 12, { size: 7, alpha: 0.9 });
+  });
+  drawSprite(ctx, 'godcrystal', lx + 3, 177);
+  text(ctx, `${g.state.crystals || 0} god crystals`, lx + 11, 170, { size: 8, color: '#9aff6a' });
 }
 
 // ---------------------------------------------------------------- PAUSE
@@ -931,8 +974,10 @@ export function drawDead(g, ctx) {
 
 export const CREDITS = [
   'PLATYPUS ADVENTURES', '', 'The Vale is saved.',
-  'The rivers run bright once more.', '',
+  'Gus\'s family is together again,',
+  'and the rivers run bright once more.', '',
   'GUS', 'River Guardian, crayfish enthusiast', '',
+  'MUM & DAD', 'The River Guardians, home at last', '',
   'STARRING',
   'Elder Mirri - Wombeau the Wombat',
   'Pip & Marlo - The Elemental Fangs', '',
@@ -940,9 +985,11 @@ export const CREDITS = [
   'Murkmaw the Gulper Leviathan',
   'Galestrike the Storm Eagle',
   'King Goanna the Earthshaker',
-  'and APEXUS, the Primal Chimera', '',
+  'APEXUS, the Primal Chimera',
+  'and XENOMANTIS, the Alien Mantis', '',
   'Every enemy is safe and sound.',
-  'They have opened a smoothie stand.', '',
+  'They have opened a smoothie stand.',
+  'Even the zombies. ESPECIALLY the zombies.', '',
   'Thanks for playing!', '',
   'The Vale stays open --',
   'elites now roam for true heroes.', '',
@@ -957,11 +1004,18 @@ export function drawVictory(g, ctx) {
     if (y > -20 && y < VIEW_H + 10)
       text(ctx, l, VIEW_W / 2, y, { size: i === 0 ? 12 : 8, align: 'center', color: i === 0 ? '#f0c83a' : '#f0ead8' });
   });
-  ctx.save();
-  ctx.translate(VIEW_W / 2 + Math.sin(g.time) * 60, VIEW_H - 30);
-  ctx.scale(2, 2);
-  drawSprite(ctx, 'gus_walk1', 0, 0, { flip: Math.sin(g.time) > 0 });
-  ctx.restore();
+  // Gus strolls back and forth along the bottom, with Mum and Dad a step behind him
+  const dir = Math.cos(g.time) >= 0 ? 1 : -1;
+  const walkers = [['gus', 0], ...(g.state.flags.parents_free ? [['dad', -36], ['mum', -72]] : [])];
+  for (const [who, off] of walkers) {
+    ctx.save();
+    ctx.translate(VIEW_W / 2 + Math.sin(g.time) * 60 + off * dir, VIEW_H - 30);
+    ctx.scale(2, 2);
+    drawSprite(ctx, who + (Math.floor(g.time * 6) % 2 ? '_walk1' : '_walk2'), 0, 0, { flip: dir < 0 });
+    if (who !== 'gus' && !g.state.flags.god_armor) drawSprite(ctx, who === 'dad' ? 'dad_band' : 'mum_bow', 0, 0, { flip: dir < 0 });
+    if (g.state.armor > 0 && (who === 'gus' || g.state.flags.god_armor)) drawSprite(ctx, 'armor' + g.state.armor, 0, 0, { flip: dir < 0 });
+    ctx.restore();
+  }
   if (g.creditsY > CREDITS.length * 16 + VIEW_H - 40)
     text(ctx, touch.enabled ? '- TAP -' : '- E -', VIEW_W / 2, VIEW_H - 14, { size: 8, align: 'center', alpha: 0.6 + 0.4 * Math.sin(g.time * 4) });
 }
