@@ -5,8 +5,9 @@ export const VIEW_H = 240;
 export const TILE = 16;             // tile size in pixels
 export const ROOM_W = 25;           // dungeon room size in tiles (one screen)
 export const ROOM_H = 15;
-export const WORLD_W = 200;         // overworld size in tiles
+export const WORLD_W = 200;         // the Vale itself, in tiles
 export const WORLD_H = 200;
+export const OCEAN_W = 36;          // the ocean all the way around it, in tiles
 export const WORLD_SEED = 987614;   // deterministic overworld
 
 // --- key bindings: physical key -> named action ---
@@ -25,11 +26,13 @@ export const KEYMAP = {
   KeyM: 'map',
   Escape: 'pause', KeyP: 'pause',
   KeyO: 'mute',
+  KeyF: 'power', KeyB: 'power',
+  KeyG: 'powerNext', Tab: 'powerNext',
   Digit1: 'slot1', Digit2: 'slot2', Digit3: 'slot3',
   Digit4: 'slot4', Digit5: 'slot5', Digit6: 'slot6',
   // debug (only honored with ?debug=1)
-  F1: 'dbgGear', F2: 'dbgWarp', F3: 'dbgHeal', F4: 'dbgRich', F5: 'dbgPuggles', F6: 'dbgKeepsakes', KeyG: 'dbgGod',
-  F7: 'dbgCrystals', F8: 'dbgEndgame',
+  F1: 'dbgGear', F2: 'dbgWarp', F3: 'dbgHeal', F4: 'dbgRich', F5: 'dbgPuggles', F6: 'dbgKeepsakes', F9: 'dbgGod',
+  F7: 'dbgCrystals', F8: 'dbgEndgame', F10: 'dbgPowers',
 };
 
 // --- player balance ---
@@ -38,7 +41,7 @@ export const PLAYER = {
   swimSpeed: 52,
   slowMult: 0.62,       // shallow water / mud
   baseHearts: 3,        // 1 heart = 2 hp
-  maxHearts: 20,        // 3 base + 13 bought at the shrine (to 16) + 4 from the dungeons
+  maxHearts: 25,        // 3 base + 13 bought at the shrine (to 16) + 4 from the dungeons + 5 royal gems
   iframes: 0.9,         // seconds of invulnerability after a hit
   swordCooldown: 0.32,
   swordTime: 0.18,      // active slash window
@@ -142,7 +145,7 @@ export const tierCoins = (c, tier) => c + tier;
 // Held, not tapped, so it can't fire by accident mid-fight. Works from dungeons too.
 export const TELEPORT = {
   hold: 1.6,          // seconds of holding before it fires
-  dest: [100, 112],   // Billabong Village plaza, in tiles
+  dest: [100 + 36, 112 + 36],   // Billabong Village plaza, in tiles (past the ocean margin)
   cancelBlipAfter: 0.3,
 };
 
@@ -222,7 +225,9 @@ export const REGION_NAMES = {
   marsh: 'Willow Marsh', village: 'Billabong Village',
   fire: 'Cinderscale Wastes', water: 'Mistfall Lagoon',
   air: 'Skyreach Bluffs', earth: 'Rootdeep Forest',
-  confluence: 'The Confluence', goo: 'The Goo Lands',
+  confluence: 'The Confluence', goo: 'The Goo Lands', ocean: 'The Great Ocean',
+  kingdom: 'Castle Mirri', meadows: 'Molehill Meadows', hills: 'Hopscotch Hills', ridge: 'Rumble Ridge',
+  lake: 'Mirror Lake', woods: 'The Royal Woods',
 };
 
 export const DUNGEON_NAMES = {
@@ -353,6 +358,34 @@ export const KEEPSAKE_ARENA_WAVE = 10;     // clearing this wave in the Crucible
 export const KEEPSAKE_PUGGLES = 25;        // puggles home before Mama hands over the drawing
 
 // --- the endgame: past Apexus, across the Great Chasm ---
+// --- the five powers, one from each of the Platypus Kingdom's dungeons ---
+// F uses the one selected (G swaps); in deep water F always dives.
+export const POWERS = ['shovel', 'jump', 'dash', 'dive', 'hook'];
+export const POWER_INFO = {
+  shovel: { name: 'Shovel', item: 'THE SHOVEL', sprite: 'pw_shovel', color: '#e0b060',
+    how: 'Press F to dig the ground in front of you. Sometimes there is treasure... and sometimes there is not!' },
+  jump: { name: 'Jump', item: 'SPRING BOOTS', sprite: 'pw_jump', color: '#a8e0ff',
+    how: 'Press F to JUMP over holes, gaps and low walls.' },
+  dash: { name: 'Dash', item: 'DASH FLIPPERS', sprite: 'pw_dash', color: '#ffb84a',
+    how: 'Press F to DASH! Smash through rubble and zoom right past danger.' },
+  dive: { name: 'Dive', item: 'DIVING HELMET', sprite: 'pw_dive', color: '#6affd8',
+    how: 'Press F in deep water to DIVE. Swim under rock arches and find secret things on the bottom!' },
+  hook: { name: 'Hook', item: 'GRAPPLE HOOK', sprite: 'pw_hook', color: '#ffd84a',
+    how: 'Press F to throw it. Hook a gold-ringed post and ZIP across!' },
+};
+export const POWER = {
+  jumpTime: 0.46, jumpSpeed: 132, jumpHeight: 12,
+  dashTime: 0.24, dashSpeed: 300, dashCd: 0.5,
+  digTime: 0.32,
+  breath: 4,                 // seconds Gus can stay under
+  hookSpeed: 420, hookRange: 10 * 16, zipSpeed: 300,
+};
+
+// Alien goo works like gloom: wading through it is slow, and every bite it takes (and every
+// goo blob that hits) leaves that half heart broken. Broken hearts can't be healed until Gus
+// has been out of the goo for `wait` seconds; then they mend one half heart every `fade`.
+export const GLOOM = { slow: 0.45, tick: 0.8, wait: 3, fade: 0.5 };
+
 // Every enemy in the Goo Lands has crawled out of alien goo: a zombie, far tougher than the
 // one it used to be, and worth a handful of god crystals. Enough crystals forge God Armor.
 export const CRYSTAL_GOAL = 300;

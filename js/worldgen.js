@@ -1,15 +1,24 @@
-// Deterministic overworld builder: 200x200 tiles, 5 elemental regions around a central hub.
-import { WORLD_W as W, WORLD_H as H, WORLD_SEED, TILE } from './config.js';
+// Deterministic overworld builder: the Vale (200x200 tiles, 5 elemental regions around a
+// central hub) with the great ocean all the way round it.
+//
+// Everything is laid out in the Vale's own tiles first, then dropped into the middle of the
+// bigger world, OCEAN_W tiles in from every edge: the exported LM, and every prop, puzzle and
+// spawner the area hands back, are in world tiles.
+import { WORLD_W as W, WORLD_H as H, WORLD_SEED, TILE, OCEAN_W as OFF } from './config.js';
 import { rng, irand, choose, clamp, dist } from './util.js';
 import { T, isSolid, props } from './tiles.js';
 import { HOUSES } from './houses.js';
 
 // GOO is the Goo Lands, a separate area past the Great Chasm (endgame.js), never part of the Vale
-export const REGION = { MARSH: 0, FIRE: 1, WATER: 2, AIR: 3, EARTH: 4, CONFLUENCE: 5, VILLAGE: 6, GOO: 7 };
-export const REGION_KEYS = ['marsh', 'fire', 'water', 'air', 'earth', 'confluence', 'village', 'goo'];
+// the rest are the Platypus Kingdom's (kingdom.js), across the sea
+export const REGION = { MARSH: 0, FIRE: 1, WATER: 2, AIR: 3, EARTH: 4, CONFLUENCE: 5, VILLAGE: 6, GOO: 7, OCEAN: 8,
+  KINGDOM: 9, MEADOWS: 10, HILLS: 11, RIDGE: 12, LAKE: 13, WOODS: 14 };
+export const REGION_KEYS = ['marsh', 'fire', 'water', 'air', 'earth', 'confluence', 'village', 'goo', 'ocean',
+  'kingdom', 'meadows', 'hills', 'ridge', 'lake', 'woods'];
+export const OW_W = W + OFF * 2, OW_H = H + OFF * 2;     // the whole world, ocean and all
 
-// landmark tile coordinates
-export const LM = {
+// landmark tile coordinates, in the Vale's own tiles (LM below has them in world tiles)
+const LM_VALE = {
   start: [100, 152],           // Gus's burrow
   village: [100, 110],         // plaza center
   statue: [100, 109],
@@ -20,9 +29,15 @@ export const LM = {
   nexusGate: [100, 14],
   gate: [100, 44],             // confluence gate
   arenaGate: [118, 110],       // The Crucible, just outside the village's east gate
+  plaza: [100, 112],           // where Gus turns up when he warps or comes home
+  royalBridge: [100, 233],     // the far end of the Royal Bridge, out at the world's south edge
 };
+export const LM = Object.fromEntries(Object.entries(LM_VALE).map(([k, [x, y]]) => [k, [x + OFF, y + OFF]]));
+// a house door from houses.js (world tiles) back in the Vale's own
+const doorOf = (id) => [HOUSES[id].door[0] - OFF, HOUSES[id].door[1] - OFF];
 
 export function buildOverworld() {
+  const LM = LM_VALE;
   const r = rng(WORLD_SEED);
   const tiles = new Uint8Array(W * H).fill(T.GRASS);
   const region = new Uint8Array(W * H).fill(REGION.MARSH);
@@ -188,7 +203,7 @@ export function buildOverworld() {
   const house = (hx, hy, id, shop = false) => {
     for (let x = hx; x < hx + 4; x++) { set(x, hy, T.ROOF); set(x, hy + 1, T.ROOF); set(x, hy + 2, T.WALL); }
     set(hx, hy + 2, shop ? T.SHOPWALL : T.WINDOW); set(hx + 3, hy + 2, T.WINDOW);
-    set(...HOUSES[id].door, T.HDOOR);
+    set(...doorOf(id), T.HDOOR);
   };
   house(92, 104, 'pip'); house(105, 104, 'shop', true); house(92, 113, 'tully'); house(104, 113, 'marlo');
 
@@ -270,7 +285,7 @@ export function buildOverworld() {
     { kind: 'sign', tx: 91, ty: 107, text: "PIP & DOT'S HOUSE.|Please knock. Dot will answer. Dot answers EVERYTHING." },
     { kind: 'sign', tx: 96, ty: 116, text: "TULLY'S CURIO HUT.|Curious things and curiouser stories." },
     { kind: 'sign', tx: 108, ty: 116, text: "MARLO'S HOUSE.|Gone fishing. (Not really. Come in!)" },
-    ...['pip', 'shop', 'tully', 'marlo'].map(id => ({ kind: 'house', id, tx: HOUSES[id].door[0], ty: HOUSES[id].door[1] })),
+    ...['pip', 'shop', 'tully', 'marlo'].map(id => ({ kind: 'house', id, tx: doorOf(id)[0], ty: doorOf(id)[1] })),
     // Keep landmarks out of the house footprints (x92-95 / x104-108 at y104-106 and y113-115).
     // Sprites are bottom-anchored, so a roof on the tile *below* visually swallows them.
     { kind: 'shrine', tx: 97, ty: 112 },
@@ -720,7 +735,7 @@ export function buildOverworld() {
   // its bottom row: Gus's burrow in the start glade, Mama Pearl's cottage in her meadow ---
   const building = (id, sprite, x0, y0, w, h, extra = {}) => {
     for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) set(x, y, T.BUILDING);
-    const [dx, dy] = HOUSES[id].door;
+    const [dx, dy] = doorOf(id);
     set(dx, dy, T.HDOOR);
     propList.push({ kind: 'building', sprite, tx: x0, ty: y0, w, h, ...extra });
     propList.push({ kind: 'house', id, tx: dx, ty: dy });
@@ -729,6 +744,48 @@ export function buildOverworld() {
   disc(104, 152, 2.2, (x, y) => { if (CLEARABLE.has(get(x, y))) set(x, y, T.GRASS); });   // front yard
   building('gus', 'burrow_ext', 102, 148, 5, 3, { smoke: true });
   building('mama', 'cottage_ext', 93, 120, 5, 3, { marker: 'mama' });
+
+  // --- golden crayfish: a few lurk in the river and the ponds, and one nibble lifts the goo's
+  // hold on Gus's hearts. Snapped to real water; they're back every time the Vale loads. ---
+  for (const [nx, ny] of [[130, 52], [134, 96], [140, 136], [86, 122], [70, 90]]) {
+    const at = nearest(nx, ny, t => t === T.DEEP || t === T.SHALLOW);
+    if (at) propList.push({ kind: 'suncray', tx: at[0], ty: at[1] });
+  }
+
+  // --- secret books lying about the Vale (books.js), and the treasure some of them tell of:
+  // dug up with the shovel, marked with an X once the book's been read ---
+  const buried = [];
+  const openGround2 = (t) => !isSolid(t) && !props(t).water && !props(t).deep && !props(t).lava && t !== T.STAIRS && t !== T.HDOOR;
+  const openAt = (nx, ny) => nearest(nx, ny, openGround2);
+  const book = (id, nx, ny) => { const at = openAt(nx, ny); if (at) propList.push({ kind: 'book', id, tx: at[0], ty: at[1] }); };
+  const treasure = (bookId, nx, ny, contents, ground) => {
+    const at = nearest(nx, ny, t => t === ground);
+    if (!at) return;
+    buried.push({ tx: at[0], ty: at[1], contents });
+    propList.push({ kind: 'xmark', book: bookId, tx: at[0], ty: at[1] });
+  };
+  book('bk_mirri', 101, 127);
+  book('bk_goldcray', 121, 104);
+  book('bk_pirate', 148, 160);
+  treasure('bk_pirate', 142, 176, { diamonds: 5, coins: 150 }, T.SAND);
+  book('bk_fenwick', 165, 36);
+  book('bk_forest', 40, 160);
+  treasure('bk_forest', 18, 186, { diamonds: 3, coins: 80 }, T.DARKGRASS);
+  book('bk_sky', 30, 52);
+  treasure('bk_sky', 18, 18, { diamonds: 4, coins: 100 }, T.PATH);
+  book('bk_reef', 60, 198);
+  // ...and the glint on the river bottom under the bridge east of the village (Mirri's diary)
+  {
+    let bridge = null, bd = Infinity;
+    for (let y = 70; y <= 115; y++) for (let x = 120; x <= 150; x++) {
+      if (get(x, y) !== T.BRIDGE) continue;
+      const d = dist(x, y, 136, 96);
+      if (d < bd) { bd = d; bridge = [x, y]; }
+    }
+    const at = bridge && nearest(bridge[0], bridge[1] + 1, t => t === T.DEEP);
+    if (at) propList.push({ kind: 'divespot', id: 'dive_bridge', tx: at[0], ty: at[1], contents: { diamonds: 3, coins: 50 },
+      msg: 'Something on the river bottom! Just like Elder Mirri wrote.' });
+  }
 
   // --- enemy spawners ---
   const rSp = rng(WORLD_SEED + 3);
@@ -776,11 +833,100 @@ export function buildOverworld() {
     placedW++;
   }
 
+  // ---------------------------------------------------------------- THE OCEAN
+  // Drop the Vale into the middle of the world and fill everything round it with sea: a
+  // beach where the border cliffs used to stand, a band of shallows, then open ocean with
+  // coral reefs scattered through it. Nothing lives out there; it's just for exploring.
+  const BW = OW_W, BH = OW_H;
+  const world = new Uint8Array(BW * BH).fill(T.OCEAN);
+  const worldReg = new Uint8Array(BW * BH).fill(REGION.OCEAN);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    world[(y + OFF) * BW + x + OFF] = tiles[idx(x, y)];
+    worldReg[(y + OFF) * BW + x + OFF] = region[idx(x, y)];
+  }
+  const wIn = (x, y) => x >= 0 && y >= 0 && x < BW && y < BH;
+  const wget = (x, y) => wIn(x, y) ? world[y * BW + x] : T.OCEAN;
+  const wset = (x, y, t) => { if (wIn(x, y)) world[y * BW + x] = t; };
+  const ro = rng(WORLD_SEED + 900);
+  // smooth wobble along the coast, so the beach and shallows don't run ruler-straight
+  const wob = Array.from({ length: 64 }, () => ro());
+  const coast = (i, k) => { const a = (i / 9 + k * 17) % 64, i0 = Math.floor(a), f = a - i0; return wob[i0] * (1 - f) + wob[(i0 + 1) % 64] * f; };
+  // the old border cliffs become beach -- except where they wall in the Confluence
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (x >= 2 && y >= 2 && x < W - 2 && y < H - 2) continue;
+    if (get(x, y) === T.CLIFF && reg(x, y) !== REGION.CONFLUENCE) wset(x + OFF, y + OFF, T.SAND);
+  }
+  for (let y = 0; y < BH; y++) for (let x = 0; x < BW; x++) {
+    // how far out to sea, and along which side of the Vale
+    const ox = x < OFF ? OFF - x : x >= OFF + W ? x - (OFF + W - 1) : 0;
+    const oy = y < OFF ? OFF - y : y >= OFF + H ? y - (OFF + H - 1) : 0;
+    const d = Math.max(ox, oy);
+    if (!d) continue;
+    const side = oy >= ox ? (y < OFF ? 0 : 2) : (x < OFF ? 3 : 1);
+    const along = side % 2 ? y : x;
+    const beach = 1 + Math.round(coast(along, side) * 3), shallows = beach + 2 + Math.round(coast(along, side + 4) * 3);
+    // north of the Confluence the coast is sheer cliff straight down into the sea
+    const confluence = y < OFF && x >= OFF + 76 && x <= OFF + 124;
+    if (d <= beach) wset(x, y, confluence ? T.CLIFF : T.SAND);
+    else if (d <= shallows) wset(x, y, T.SHALLOW);
+  }
+  // coral reefs: patches of bright shallows out at sea, coral growing up through them, and
+  // here and there a sandbar with a palm on it
+  const reefs = [];
+  for (let tries = 0; reefs.length < 18 && tries < 400; tries++) {
+    const x = Math.floor(ro() * BW), y = Math.floor(ro() * BH);
+    const ox = x < OFF ? OFF - x : x >= OFF + W ? x - (OFF + W - 1) : 0;
+    const oy = y < OFF ? OFF - y : y >= OFF + H ? y - (OFF + H - 1) : 0;
+    const d = Math.max(ox, oy), rad = 3 + ro() * 4;
+    if (d < 11 + rad || x < rad + 2 || y < rad + 2 || x > BW - rad - 3 || y > BH - rad - 3) continue;
+    if (reefs.some(([rx, ry]) => dist(rx, ry, x, y) < 16)) continue;
+    reefs.push([x, y, rad]);
+  }
+  for (const [cx, cy, rad] of reefs) {
+    for (let y = Math.floor(cy - rad - 1); y <= cy + rad + 1; y++) for (let x = Math.floor(cx - rad - 1); x <= cx + rad + 1; x++) {
+      const dd = dist(x, y, cx, cy) + (ro() - 0.5) * 1.6;
+      if (dd > rad) continue;
+      wset(x, y, dd < rad - 1 && ro() < 0.28 ? T.CORAL : T.REEF);
+    }
+    if (ro() < 0.45) {
+      const sx = Math.round(cx + (ro() - 0.5) * rad), sy = Math.round(cy + (ro() - 0.5) * rad);
+      for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [-1, 0], [1, 1]]) wset(sx + dx, sy + dy, T.SAND);
+      wset(sx, sy, T.PALM);
+    }
+  }
+
+  // the Royal Bridge: a road south from the burrow glade down to the beach, then a long
+  // bridge straight out across the sea to the Platypus Kingdom
+  const links = [];
+  {
+    const bx = OFF + 100;
+    for (let y = OFF + 157; y < BH; y++) for (const x of [bx, bx + 1]) {
+      const t = wget(x, y), p = props(t);
+      if (y >= BH - 1) wset(x, y, T.PASSAGE);
+      else if (p.deep || p.water || t === T.REED || t === T.CORAL) wset(x, y, T.BRIDGE);
+      else wset(x, y, y < OFF + H ? T.PATH : T.SAND);
+    }
+    for (const x of [bx, bx + 1]) links.push({ tx: x, ty: BH - 1, to: 'kingdom' });
+    propList.push({ kind: 'sign', tx: 102, ty: 158, text: 'SOUTH: THE ROYAL BRIDGE.|All the way across the sea to the Platypus Kingdom and Castle Mirri!' });
+  }
+
+  // everything placed above, moved out into world tiles
+  const mv = ([x, y]) => [x + OFF, y + OFF];
+  for (const p of propList) { p.tx += OFF; p.ty += OFF; }
+  for (const pz of puzzles) {
+    for (const k of ['doors', 'eyes', 'plates', 'blocks', 'spawns']) if (pz[k]) pz[k] = pz[k].map(mv);
+    for (const k of ['trigger', 'start', 'goal']) if (pz[k]) pz[k] = mv(pz[k]);
+  }
+  for (const sp of spawners) { sp.tx += OFF; sp.ty += OFF; sp.x += OFF * TILE; sp.y += OFF * TILE; }
+  const buriedAt = {};
+  for (const b of buried) buriedAt[(b.tx + OFF) + ',' + (b.ty + OFF)] = b.contents;
+  const regAt = (x, y) => wIn(x, y) ? worldReg[y * BW + x] : REGION.OCEAN;
+
   return {
     id: 'overworld', type: 'overworld', theme: 'ow',
-    w: W, h: H, tiles, region,
-    get, set, regionAt: reg,
-    spawners, props: propList, puzzles,
-    playerStart: { x: LM.start[0] * TILE + 8, y: (LM.start[1] + 2) * TILE + 8 },
+    w: BW, h: BH, tiles: world, region: worldReg,
+    get: wget, set: wset, regionAt: regAt,
+    spawners, props: propList, puzzles, buried: buriedAt, links,
+    playerStart: { x: (LM.start[0] + OFF) * TILE + 8, y: (LM.start[1] + OFF + 2) * TILE + 8 },
   };
 }

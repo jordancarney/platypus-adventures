@@ -1,11 +1,11 @@
 // HUD, title screen, dialogs, shop, shrine, map, pause, banners, death, credits.
 import { VIEW_W, VIEW_H, ARROW_TYPES, ARROWS, UPGRADE_TRACKS, CONSUMABLES, MAX_LEVEL,
   ARROW_UP_BASE, ARROW_UP_STEP, ARROW_UP_DESC, VESSEL_COSTS, REGION_NAMES, TELEPORT, SPRINT, SIDE_QUESTS,
-  GOD_SWORD_LV, PUGGLE_TOTAL, KEEPSAKE_TOTAL, GOD_ARMOR_LV, CRYSTAL_GOAL } from './config.js';
+  GOD_SWORD_LV, PUGGLE_TOTAL, KEEPSAKE_TOTAL, GOD_ARMOR_LV, CRYSTAL_GOAL, POWERS, POWER_INFO } from './config.js';
 import { clamp } from './util.js';
 import { drawSprite } from './pixelart.js';
 import { drawText, textWidth } from './font.js';
-import { REGION_KEYS } from './worldgen.js';
+import { REGION_KEYS, LM } from './worldgen.js';
 import { T } from './tiles.js';
 import { touch, STICK, PAD_BUTTONS, TOP_BUTTONS } from './touch.js';
 import { VERSION } from './version.js';
@@ -50,6 +50,15 @@ export function drawHUD(g, ctx) {
       // heart sprite is 7px wide starting at hx-1; clip to its left half
       ctx.beginPath(); ctx.rect(hx - 1, hy - 1, 3.5, 8); ctx.clip();
       drawSprite(ctx, 'heart', hx + 3, hy + 6);
+      ctx.restore();
+    }
+    // hearts broken by the goo: dark and throbbing, the whole heart or just its right half
+    const cap = st.maxHp - (st.gloom || 0) - i * 2;
+    if (cap < 2) {
+      ctx.save();
+      if (cap === 1) { ctx.beginPath(); ctx.rect(hx + 2.5, hy - 1, 4, 8); ctx.clip(); }
+      ctx.globalAlpha = 0.8 + 0.2 * Math.sin(g.time * 5 + i);
+      drawSprite(ctx, 'heart_gloom', hx + 3, hy + 6);
       ctx.restore();
     }
   }
@@ -104,6 +113,14 @@ export function drawHUD(g, ctx) {
     // short labels keep the widest name inside the panel at the bitmap font's 6px advance
     text(ctx, ARROW_SHORT[st.arrowSel] + ' L' + (owned ? owned.level : 1), VIEW_W - 70, 17, { size: 7, color: info.color });
     text(ctx, 'Q/R', VIEW_W - 72, 30, { size: 7, alpha: 0.7 });
+  }
+  // the selected power, just left of the arrows: F uses it, G swaps
+  if (st.powerSel) {
+    const bx = VIEW_W - (st.bow > 0 ? 100 : 30);
+    panel(ctx, bx, 4, 24, 24, 0.6);
+    drawSprite(ctx, POWER_INFO[st.powerSel].sprite, bx + 12, 22);
+    text(ctx, 'F', bx + 2, 30, { size: 7, alpha: 0.7 });
+    if (POWERS.filter(id => st.powers[id]).length > 1) text(ctx, 'G', bx + 17, 30, { size: 7, alpha: 0.7 });
   }
   // dungeon keys
   if (g.area.type === 'dungeon') {
@@ -388,7 +405,24 @@ export function drawDialog(g, ctx) {
     shown -= l.length;
     text(ctx, l.slice(0, take), 18, VIEW_H - h + 4 + i * 12, { size: 9 });
   });
-  if (d.done) text(ctx, 'E', VIEW_W - 24, VIEW_H - 16, { size: 8, alpha: 0.6 + 0.4 * Math.sin(g.time * 5), color: '#f0c83a' });
+  const asking = d.choices && d.done && d.page === d.pages.length - 1;
+  if (d.done && !asking) text(ctx, 'E', VIEW_W - 24, VIEW_H - 16, { size: 8, alpha: 0.6 + 0.4 * Math.sin(g.time * 5), color: '#f0c83a' });
+  if (asking) {
+    const rs = dialogChoiceRects(d);
+    const top = rs[0], last = rs[rs.length - 1];
+    panel(ctx, top.x - 6, top.y - 4, top.w + 12, last.y + last.h - top.y + 8);
+    d.choices.forEach((c, i) => {
+      const r = rs[i], on = i === d.sel;
+      if (on) { ctx.fillStyle = 'rgba(240,200,58,0.18)'; ctx.fillRect(r.x, r.y, r.w, r.h); }
+      text(ctx, (on ? '> ' : '  ') + c.label, r.x + 4, r.y + 3, { size: 8, color: on ? '#f0c83a' : '#e8e0d0' });
+    });
+  }
+}
+// the menu of answers when a dialog asks a question: stacked above the box, on the right
+export function dialogChoiceRects(d) {
+  const w = 104, h = 13, x = VIEW_W - w - 16, n = d.choices.length;
+  const y0 = VIEW_H - 58 - 6 - 8 - n * h;
+  return d.choices.map((_, i) => ({ x, y: y0 + i * h, w, h }));
 }
 
 // ---------------------------------------------------------------- SHOP
@@ -510,6 +544,15 @@ function tileMapColor(id) {
   else if (id === T.GOO) c = '#6ad04a';
   else if (id === T.PIT || id === T.PASSAGE) c = '#07050c';
   else if (id === T.STAIRS) c = '#c88aff';
+  else if (id === T.UNDERPASS) c = '#2a5a88';
+  else if (id === T.OCEAN) c = '#1e4a86';
+  else if (id === T.REEF) c = '#3aa8b0';
+  else if (id === T.CORAL) c = '#e07aa8';
+  else if ([T.CWALL, T.CTOP].includes(id)) c = '#d8d4cc';
+  else if (id === T.CFLOOR) c = '#b8ac90';
+  else if ([T.DIRTPILE, T.MOUND, T.DUG].includes(id)) c = '#7a5232';
+  else if ([T.RUBBLE, T.LOWWALL].includes(id)) c = '#9a8a6a';
+  else if (id === T.POST) c = '#f0c83a';
   MAP_COLORS[id] = c;
   return c;
 }
@@ -530,23 +573,24 @@ export function buildMinimap(area) {
 export function drawMap(g, ctx) {
   panel(ctx, 8, 8, VIEW_W - 16, VIEW_H - 16, 0.94);
   // indoors, the map is still the Vale, with Gus's dot on the front door he came in by
-  const ow = g.area.type === 'overworld' ? g.area : g.area.type === 'house' ? g.overworldRef() : null;
+  const ow = g.area.id === 'overworld' ? g.area : g.area.type === 'house' && g.area.id !== 'house_castle' ? g.overworldRef() : null;
   if (ow && g.minimap) {
-    const mx = 24, my = 28, scale = 1.85;
+    // the whole world, ocean and all, squeezed into the same square the Vale used to fill
+    const mx = 24, my = 28, size = 185, scale = size / g.minimap.width;
     text(ctx, 'BILLABONG VALE', mx + 92, 14, { size: 9, align: 'center', color: '#f0c83a' });
     ctx.save();
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(g.minimap, mx, my, 100 * scale, 100 * scale);
+    ctx.drawImage(g.minimap, mx, my, size, size);
     ctx.restore();
     const pt = (tx, ty) => [mx + tx / 2 * scale, my + ty / 2 * scale];
     const marks = [
-      [100, 110, '#f0c83a', 'Village'],
-      [172, 26, g.state.dungeonsDone.fire ? '#8a8278' : '#ff7a30', 'Fire'],
-      [168, 176, g.state.dungeonsDone.water ? '#8a8278' : '#7ad4ff', 'Water'],
-      [26, 24, g.state.dungeonsDone.air ? '#8a8278' : '#e8f0ff', 'Air'],
-      [30, 172, g.state.dungeonsDone.earth ? '#8a8278' : '#a8d84a', 'Earth'],
+      [...LM.village, '#f0c83a', 'Village'],
+      [...LM.fireGate, g.state.dungeonsDone.fire ? '#8a8278' : '#ff7a30', 'Fire'],
+      [...LM.waterGate, g.state.dungeonsDone.water ? '#8a8278' : '#7ad4ff', 'Water'],
+      [...LM.airGate, g.state.dungeonsDone.air ? '#8a8278' : '#e8f0ff', 'Air'],
+      [...LM.earthGate, g.state.dungeonsDone.earth ? '#8a8278' : '#a8d84a', 'Earth'],
       // the Nexus stays lit past Apexus: the Guardian Bridge to the Goo Lands starts inside it
-      [100, 14, g.state.flags.xeno_done ? '#8a8278' : '#c88aff', 'Nexus'],
+      [...LM.nexusGate, g.state.flags.xeno_done ? '#8a8278' : '#c88aff', 'Nexus'],
     ];
     for (const [tx, ty, color] of marks) {
       const [px, py] = pt(tx, ty);
@@ -581,7 +625,7 @@ export function drawMap(g, ctx) {
       ctx.fillRect(px - 1.5, py - 1.5, 4, 4);
     }
     // legend
-    const lx = mx + 100 * scale + 14;
+    const lx = mx + size + 14;
     text(ctx, 'QUEST', lx, 30, { size: 8, color: '#f0c83a' });
     drawQuestList(g, ctx, lx, 44);
     text(ctx, 'SIDE QUESTS', lx, 122, { size: 8, color: '#ff8ad0' });
@@ -599,6 +643,8 @@ export function drawMap(g, ctx) {
     text(ctx, `KEEPSAKES  ${keeps} / ${KEEPSAKE_TOTAL}`, lx + 13, 204, { size: 8, color: allKeeps ? '#ffd84a' : '#f0d890' });
   } else if (g.area.id === 'goo' && g.area.minimap) {
     drawGooMap(g, ctx);
+  } else if (g.area.id === 'kingdom' || g.area.id === 'house_castle') {
+    drawKingdomMap(g, ctx);
   } else if (g.area.isArena) {
     text(ctx, 'THE CRUCIBLE', VIEW_W / 2, 20, { size: 12, align: 'center', color: '#f0c83a' });
     const A = g.arena || { wave: 0 };
@@ -664,6 +710,48 @@ function drawQuestList(g, ctx, lx, y0) {
   });
 }
 
+// The Platypus Kingdom: Castle Mirri, the five power dungeons (gold once their gem is won),
+// and the bridge home. From the throne room it shows the castle as "you are here".
+function drawKingdomMap(g, ctx) {
+  const A = g.kingdomRef(), scale = 2.6, mx = 20, my = 26;
+  text(ctx, 'THE PLATYPUS KINGDOM', mx + A.w / 4 * scale, 12, { size: 9, align: 'center', color: '#ffd84a' });
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(A.minimap, mx, my, A.w / 2 * scale, A.h / 2 * scale);
+  ctx.restore();
+  const pt = (tx, ty) => [mx + tx / 2 * scale, my + ty / 2 * scale];
+  const mark = ([tx, ty], color) => {
+    const [px, py] = pt(tx, ty);
+    ctx.fillStyle = color; ctx.fillRect(px - 2, py - 2, 5, 5);
+    ctx.strokeStyle = '#101418'; ctx.strokeRect(px - 2.5, py - 2.5, 6, 6);
+  };
+  const L = A.lm, gems = g.state.gems || {};
+  mark(L.castle, '#ffd84a');
+  mark([L.arrive[0], 1], '#c49e70');
+  const DUNS = [['mine', 'Mole Mines'], ['heights', 'Hopscotch Heights'], ['ruins', 'Rumble Ruins'], ['halls', 'Drowned Halls'], ['spire', 'Skyhook Spire']];
+  for (const [id] of DUNS) mark(L[id], gems[id] ? '#8a8278' : '#c88aff');
+  if (Math.floor(g.time * 3) % 2 === 0) {
+    const [px, py] = g.area.id === 'house_castle' ? pt(L.keepDoor[0], L.keepDoor[1] + 1) : pt(g.player.cx / 16, g.player.cy / 16);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(px - 1.5, py - 1.5, 4, 4);
+  }
+  const lx = mx + A.w / 2 * scale + 12;
+  text(ctx, 'ROYAL GEMS', lx, 28, { size: 8, color: '#ffd84a' });
+  DUNS.forEach(([id, name], i) => {
+    text(ctx, (gems[id] ? '[x] ' : '[ ] ') + name, lx, 42 + i * 11, { size: 7, color: gems[id] ? '#8a8278' : '#f0ead8' });
+  });
+  text(ctx, 'POWERS', lx, 104, { size: 8, color: '#a8e0ff' });
+  POWERS.forEach((id, i) => {
+    if (!(g.state.powers || {})[id]) return;
+    drawSprite(ctx, POWER_INFO[id].sprite, lx + 8 + i * 22, 132);
+  });
+  const keys = [['#ffd84a', 'Castle Mirri'], ['#c88aff', 'Dungeon'], ['#c49e70', 'Bridge to the Vale']];
+  keys.forEach(([c, label], i) => {
+    ctx.fillStyle = c; ctx.fillRect(lx, 146 + i * 12, 5, 5);
+    text(ctx, label, lx + 9, 145 + i * 12, { size: 7, alpha: 0.9 });
+  });
+}
+
 function drawGooMap(g, ctx) {
   const A = g.area, scale = 5.2;
   const mx = 24, my = 30;
@@ -707,12 +795,12 @@ export function drawPause(g, ctx) {
       ['Move', 'WASD / Arrows'], ['Sword', 'Space / J / Z'], ['Bow', 'K / X'],
       ['Shield (hold)', 'L / C / Shift'], ['Sprint (hold)', 'V / ;'],
       ['Swap arrow', 'Q / R or 1-6'],
-      ['Interact', 'E / Enter'], ['Warp home', 'T / H (hold)'],
-      ['Map', 'M'], ['Mute', 'O'],
+      ['Interact', 'E / Enter'], ['Use power', 'F / B'], ['Swap power', 'G / Tab'],
+      ['Warp home', 'T / H (hold)'], ['Map', 'M'], ['Mute', 'O'],
     ];
     rows.forEach(([a, b], i) => {
-      text(ctx, a, 110, 70 + i * 11, { size: 7, color: '#a8d8c0' });
-      text(ctx, b, 196, 70 + i * 11, { size: 7 });
+      text(ctx, a, 110, 68 + i * 9, { size: 7, color: '#a8d8c0' });
+      text(ctx, b, 196, 68 + i * 9, { size: 7 });
     });
     text(ctx, 'Esc: back', VIEW_W / 2, 182, { size: 7, align: 'center', alpha: 0.8 });
     return;
@@ -793,6 +881,11 @@ function buttonIcon(ctx, icon, cx, cy, color, scale = 1) {
       ctx.fillRect(cx - 6, cy - 3, 2, 2);
       ctx.fillRect(cx - 6, cy + 2, 2, 2);
       break;
+    case 'power': break;                            // drawn over with the power's own sprite
+    case 'swap':                                    // two arrows chasing round: next power
+      ctx.fillRect(cx - 5, cy - 4, 8, 2); ctx.fillRect(cx + 1, cy - 6, 2, 6);
+      ctx.fillRect(cx - 3, cy + 2, 8, 2); ctx.fillRect(cx - 3, cy, 2, 6);
+      break;
     case 'pause':
       ctx.fillRect(cx - 4, cy - 5, 3, 10);
       ctx.fillRect(cx + 1, cy - 5, 3, 10);
@@ -846,12 +939,15 @@ export function drawTouchControls(g, ctx) {
 
   for (const b of PAD_BUTTONS) {
     // hide gear the player hasn't earned yet
+    if (b.needs === 'power' && !st.powerSel) continue;
     if (b.action === 'bow' && !st.bow) continue;
     if (b.action === 'shield' && !st.shield) continue;
     if (b.action === 'cycleR' && !st.bow) continue;
     // the swap button wears the selected arrow's colour, so type is readable at a glance
     const tint = b.action === 'cycleR' ? ARROWS[st.arrowSel].color : '#f0ead8';
     drawPadButton(ctx, b, touch.down(b.action) || (b.action === 'sprint' && g.sprint.latch), tint);
+    // the power button shows whichever power is selected
+    if (b.icon === 'power') drawSprite(ctx, POWER_INFO[st.powerSel].sprite, b.x, b.y + 6);
     // the sprint button wears the stamina bar as a ring, so a thumb never has to look away
     if (b.action === 'sprint') {
       const sp = g.sprint;
@@ -868,6 +964,7 @@ export function drawTouchControls(g, ctx) {
     }
   }
   for (const b of TOP_BUTTONS) {
+    if (b.needs === 'power' && !st.powerSel) continue;
     drawPadButton(ctx, b, touch.down(b.action));
     // the warp button wears its own charge meter so the hold has visible progress
     if (b.action === 'teleport' && g.warpT > 0) {

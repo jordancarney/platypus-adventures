@@ -15,6 +15,7 @@
 import { SWORD_LOOK, ARROWS } from './config.js';
 import { HOUSE_DEFS, buildHouseSprites } from './houseart.js';
 import { END_DEFS, buildEndSprites } from './endart.js';
+import { KING_DEFS, buildKingSprites } from './kingart.js';
 
 const DEFS = {};
 
@@ -648,27 +649,46 @@ DEFS.bigfang = { colors: { w: '#f0ead8', d: '#b0a488', g: '#f0c83a' }, map: [
 DEFS.shard = { colors: { c: '#ffffff', h: '#ffffff', d: '#888888' }, map: [
   '...cc...', '..chhc..', '.chhhc..', '.chhc...', 'chhc....', 'chc.....', 'cc......', 'c.......',
 ]};
-DEFS.chest = { colors: { w: '#8a5a2a', d: '#5a3a18', g: '#f0c83a', l: '#b07838' }, map: [
-  '.dddddddddddd.',
-  'dgWWwwwwwwWggd',
-  'dgwlwwlwwlwggd',
-  'dglllllllllggd',
-  'dddddddGdddddd',
-  'dgwwwwdgdwwggd',
-  'dgwlwwdddwlggd',
-  'dgwwwwwwwwwggd',
-  '.dddddddddddd.',
+// A treasure chest worth finding: dark wood bound in gold, a ruby set in the lock. Opened,
+// the lid tips back and the treasure inside glows.
+const CHEST_COLORS = { w: '#7a4a24', d: '#2a1808', g: '#f0c83a', l: '#9a6234', r: '#d83040', k: '#1a0f06', y: '#fff2a0' };
+DEFS.chest = { colors: CHEST_COLORS, map: [
+  '..dddddddddddd..',
+  '.dgGGggggggGGgd.',
+  'dgwWWwwwwwwWWwgd',
+  'dgwwlwwwwwwlwwgd',
+  'dgwwwwwwwwwwwwgd',
+  'dGggggggggggggGd',
+  'dgwwwwdrrdwwwwgd',
+  'dgwlwwdrRdwwlwgd',
+  'dgwwwwwddwwwwwgd',
+  'dgwlwwwwwwwwlwgd',
+  'dggggggggggggggd',
+  '.dddddddddddddd.',
 ]};
-DEFS.chest_open = { colors: { w: '#8a5a2a', d: '#5a3a18', g: '#f0c83a', k: '#241a0c', l: '#b07838' }, map: [
-  '.dddddddddddd.',
-  'dgWWwwwwwwWggd',
-  'dglllllllllggd',
-  'dddddddddddddd',
-  'dgkkkkkkkkkggd',
-  'dgkkkkkkkkkggd',
-  'dgwwwwdddwwggd',
-  'dgwlwwlwwlwggd',
-  '.dddddddddddd.',
+DEFS.chest_open = { colors: CHEST_COLORS, map: [
+  '..dddddddddddd..',
+  '.dgGGggggggGGgd.',
+  'dgwwlwwwwwwlwwgd',
+  'dgkkkkkkkkkkkkgd',
+  'dgkyyyyyyyyyykgd',
+  'dGyYYyyyyyyYYyGd',
+  'dgwwwwdrrdwwwwgd',
+  'dgwlwwdrRdwwlwgd',
+  'dgwwwwwddwwwwwgd',
+  'dgwlwwwwwwwwlwgd',
+  'dggggggggggggggd',
+  '.dddddddddddddd.',
+]};
+// a golden crayfish from the rivers: one nibble and the goo lets go of Gus's hearts
+DEFS.suncray = { colors: { r: '#f0b020', d: '#8a5a10', l: '#fff0a0', e: '#111' }, shade: { k: ['r', -0.25] }, map: [
+  'Rr.....rR..',
+  '.Rr...rR...',
+  '..rdRrrd...',
+  '.rRrrrrrrd.',
+  'derrlLlrrdd',
+  '.rrrkkkrrd.',
+  '..d..d..d..',
 ]};
 // Open clay jar: a thick oval rim, dark interior, narrow neck and rounded belly.
 DEFS.pot = { colors: { c: '#b87853', d: '#4c3540', h: '#e4ad77', i: '#382d38' }, shade: { k: ['c', -0.3] }, map: [
@@ -781,6 +801,10 @@ DEFS.wombat = { colors: { b: '#8a6a4a', l: '#c0a888', e: '#14100c', o: '#5a4432'
 DEFS.villager = { colors: { ...GUS_COLORS, b: '#a06a3a', l: '#d8b088' }, shade: GUS_SHADE, map: DEFS.gus_idle.map };
 DEFS.heart = { colors: { r: '#e04a5a', h: '#ff9aa8', d: '#8a1a2a' }, map: [
   '.rr.rr.', 'rhrrrrr', 'rrrrrrr', '.rrrrr.', '..rrr..', '...r...',
+]};
+// a heart broken by the alien goo: near-black, with a sick red crack through it
+DEFS.heart_gloom = { colors: { r: '#2a0c34', h: '#5a1a6a', c: '#e0304a' }, map: [
+  '.rr.rr.', 'rhrcrrr', 'rrcrrrr', '.rrcrr.', '..rcr..', '...r...',
 ]};
 // Mama Pearl: Gus's build in a warmer coat, a pink apron where his scarf sits, and a
 // flower tucked behind her ear so she reads as someone new at a glance.
@@ -1139,7 +1163,7 @@ const VARIANTS = {
   // Dot, Pip's little sister: a lighter coat and a pink scarf
   dot: { base: 'villager', colors: { b: '#c48a5a', l: '#f2d4a8', m: '#e27aa4' } },
 };
-Object.assign(DEFS, HOUSE_DEFS, END_DEFS);
+Object.assign(DEFS, HOUSE_DEFS, END_DEFS, KING_DEFS);
 
 // ---------- build ----------
 export const sprites = {}; // name -> {canvas, w, h}
@@ -1209,6 +1233,7 @@ export function buildSprites() {
   sprites.gate = buildGateSprite();
   buildHouseSprites(sprites);
   buildEndSprites(sprites, { DEFS, VARIANTS, renderMap, mix });
+  buildKingSprites(sprites, { DEFS, renderMap });
 }
 
 // Two-frame animation. A def's optional `map2` (a second pose on the same grid: the other

@@ -13,6 +13,7 @@ import { drawSprite } from './pixelart.js';
 import { drawText } from './font.js';
 import { audio } from './audio.js';
 import { talk } from './endgame.js';
+import { LM } from './worldgen.js';
 
 export const LAGOON_ID = 'lagoon';
 // two waves: three sharks chasing Flipper in, then three more that hear the commotion
@@ -74,7 +75,7 @@ export function buildLagoon() {
     playerStart: { x: 12 * TILE + 8, y: 12 * TILE + 8 },
     roomAt: () => room,
     phase: 'fight', wave: 0, t: 0, cheerT: 5,
-    onEnter: (g) => { audio.music('boss'); sharkWave(g); },
+    onEnter: (g) => { audio.music('sharks'); sharkWave(g); },
     update: updateBay,
   };
 }
@@ -130,7 +131,7 @@ function updateBay(g, dt) {
 
 function finishEpilogue(g) {
   g.state.flags.epilogue_done = true;
-  g.loadArea('overworld', { x: 100 * TILE + 8, y: 112 * TILE + 8 });
+  g.loadArea('overworld', { x: LM.plaza[0] * TILE + 8, y: LM.plaza[1] * TILE + 8 });
   g.mode = 'play';
   g.toast('The Vale is peaceful... for now.');
   g.save();

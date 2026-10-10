@@ -105,18 +105,53 @@ D.altar = { colors: { d: '#1e1828', s: '#5a4a72', g: '#8aff6a' }, shade: { k: ['
 ]};
 
 // ---------- THE EPILOGUE ----------
-// A reef shark, side on: grey back and dorsal fin, pale belly, a grin full of teeth.
-D.shark = { colors: { b: '#6a7f94', l: '#dfe6ee', e: '#111111', w: '#ffffff' }, shade: { d: ['b', -0.62], s: ['b', -0.3] }, map: [
-  '.........dd.......',
-  '........dBd.......',
-  '.......dBbd.......',
-  'dd....dbbbbdddd...',
-  'dBd.ddbbbbbbbbbdd.',
-  '.dbdbbbbBbbbbbbbdd',
-  '.dbbsbbbbbbbbbbebd',
-  'dbddlllllllllwlwld',
-  'dd..ddllllllllldd.',
-  '......ddddddddd...',
+// A reef shark, side on: steel-blue back, tall dorsal fin, gill slits, a mean little eye and
+// a grin full of teeth. map2 flicks the tail; shark_bite drops the jaw wide open.
+const SHARK_COLORS = { b: '#5d7286', l: '#e8eef4', e: '#1a1020', w: '#ffffff', r: '#b02838' };
+const SHARK_SHADE = { d: ['b', -0.62], s: ['b', -0.3] };
+D.shark = { colors: SHARK_COLORS, shade: SHARK_SHADE, map: [
+  '..............dd............',
+  '.............dBd............',
+  '............dBbd............',
+  'dd.........dBbbd............',
+  'dBd.......dbbbbbdddddd......',
+  '.dBd....ddbbBBBbbbbbbbddd...',
+  '..dbd.ddbbbbbbbbbbbbbbddbdd.',
+  '..dbbdbbbbbbbbbbbsbsbbbdewbd',
+  '..dbbbbbbbbbbbbbbsbsbbbbbbbd',
+  '..dbdlllllllllllllllllldwdwd',
+  '.dBd.dllllllllldbbdlllllddd.',
+  'dBd...dddddddddbsbdddddd....',
+  'dd.............ddd..........',
+], map2: [
+  '..............dd............',
+  '.............dBd............',
+  '............dBbd............',
+  '...........dBbbd............',
+  'dd........dbbbbbdddddd......',
+  'dBdd....ddbbBBBbbbbbbbddd...',
+  '.dbbd.ddbbbbbbbbbbbbbbddbdd.',
+  '..dbbdbbbbbbbbbbbsbsbbbdewbd',
+  '..dbbbbbbbbbbbbbbsbsbbbbbbbd',
+  '.dbdllllllllllllllllllldwdwd',
+  'dBd..dllllllllldbbdlllllddd.',
+  'dd....dddddddddbsbdddddd....',
+  '...............ddd..........',
+]};
+D.shark_bite = { colors: SHARK_COLORS, shade: SHARK_SHADE, map: [
+  '..............dd............',
+  '.............dBd............',
+  '............dBbd............',
+  'dd.........dBbbd............',
+  'dBd.......dbbbbbdddddd......',
+  '.dBd....ddbbBBBbbbbbbbddd...',
+  '..dbd.ddbbbbbbbbbbbbbbddbdd.',
+  '..dbbdbbbbbbbbbbbsbsbbbdewbd',
+  '..dbbbbbbbbbbbbbbsbsbbbbbbbd',
+  '..dbdllllllllllllllllldwdwdd',
+  '.dBd.dllllllllldbbdllrrrrrd.',
+  'dBd...dddddddddbsbddldwdwdwd',
+  'dd.............ddd...ddddddd',
 ]};
 
 // ---------- BUILD ----------
@@ -154,10 +189,9 @@ export function buildEndSprites(sprites, { DEFS, VARIANTS, renderMap, mix }) {
     sprites[name + '_z'] = renderMap(base.map, z, v.scale || 1, base.shade);
     if (base.map2) sprites[name + '_z_2'] = renderMap(base.map2, z, v.scale || 1, base.shade);
   }
-  // Mecha Apexus: Apexus rebuilt in riveted steel, eyes burning red (the epilogue's cliffhanger)
-  const mecha = { ...DEFS.chimera.colors, b: '#7a8494', s: '#4a5262', l: '#c8d0dc', e: '#ff2a2a', w: '#9aa4b4', o: '#ff6a2a', t: '#5a6272', f: '#2a2e36' };
-  sprites.mecha_apexus = renderMap(DEFS.chimera.map, mecha, 2, DEFS.chimera.shade);
-  sprites.mecha_apexus_2 = renderMap(DEFS.chimera.map2, mecha, 2, DEFS.chimera.shade);
+  // Mecha Apexus: Apexus rebuilt as a towering war machine (the epilogue's cliffhanger)
+  sprites.mecha_apexus = buildMecha(false);
+  sprites.mecha_apexus_2 = buildMecha(true);
   sprites.boss_xeno = buildMantis(false);
   sprites.boss_xeno_2 = buildMantis(true);
   sprites.hive_ext = buildHive();
@@ -203,6 +237,72 @@ function scaled(src, s) {
   g.imageSmoothingEnabled = false;
   g.drawImage(src, 0, 0, c.width, c.height);
   return { canvas: c, w: c.width, h: c.height };
+}
+
+// Mecha Apexus, face on: Apexus's horned head rebuilt in gunmetal with a burning visor,
+// a reactor blazing in an armored chest, spiked shoulder plates with a cannon on each, claw
+// arms hanging to the ground, and a spiked mace of a tail curling up over one shoulder.
+// Painted at 76x60 and doubled. `hot` is the second frame: reactor, eyes and cannons flare.
+export const MECHA_ART = { w: 152, h: 120, eyes: [[64, 30], [88, 30]], core: [76, 68], guns: [[10, 18], [142, 18]] };
+function buildMecha(hot) {
+  const W = 76, H = 60;
+  const { c, g, P, ellipse, line, rows } = painter(W, H);
+  const ST = '#5a6270', STL = '#8a94a4', STH = '#c8d0dc', STD = '#3a404c', RED = '#d02a2a';
+  const GLOW = hot ? '#fff0a0' : '#ffa040', CORE = hot ? '#ff6a2a' : '#e03a2a';
+  // the tail: up from behind the right hip, over the shoulder, ending in a spiked mace
+  for (let i = 0; i <= 14; i++) ellipse(58 + Math.sin(i / 14 * 2.2) * 12, 44 - i * 2.6, 2.4, 2.4, i % 2 ? ST : STL);
+  ellipse(66, 6, 4, 4, STD); ellipse(66, 6, 3, 3, ST);
+  for (const [dx, dy] of [[0, -6], [5, -3], [6, 2], [-5, -3], [-1, 6]]) line(66, 6, 66 + dx, 6 + dy, STH);
+  // legs, planted wide, with three-toed steel feet
+  for (const lx of [24, 52]) {
+    rows(44, 56, () => lx - 6, () => lx + 6, ST);
+    rows(44, 56, () => lx - 6, () => lx - 4, STL);
+    rows(56, 59, () => lx - 9, () => lx + 9, STD);
+    for (const tx of [-8, 0, 8]) P(lx + tx - 1, 58, STH, 3, 2);
+    P(lx - 5, 49, RED, 11, 2);
+  }
+  // the torso: a broad armored block tapering to the waist
+  rows(20, 46, y => 16 + (y - 20) * 0.25, y => 60 - (y - 20) * 0.25, ST);
+  rows(20, 23, y => 17, y => 59, STL);
+  rows(24, 46, y => 16 + (y - 20) * 0.25, y => 18 + (y - 20) * 0.25, STL);
+  for (const y of [30, 38]) rows(y, y, y2 => 18 + (y2 - 20) * 0.25, y2 => 58 - (y2 - 20) * 0.25, STD);
+  // red war-stripes down the chest, and rivets
+  line(22, 24, 30, 34, RED, 2); line(54, 24, 46, 34, RED, 2);
+  for (const [x, y] of [[20, 26], [56, 26], [21, 42], [55, 42], [28, 44], [48, 44]]) P(x, y, STH);
+  // the reactor
+  ellipse(38, 34, 6, 6, STD);
+  ellipse(38, 34, 5, 5, CORE);
+  ellipse(38, 34, 3, 3, GLOW);
+  P(37, 32, '#ffffff', 2, 2);
+  // shoulders: great spiked pauldrons, each carrying a cannon pointing up and out
+  for (const [sx, dir] of [[12, -1], [64, 1]]) {
+    ellipse(sx, 24, 9, 7, ST);
+    rows(19, 21, () => sx - 7, () => sx + 7, STL);
+    for (const k of [-6, 0, 6]) line(sx + k, 18, sx + k + dir * 2, 12, STH);
+    // the cannon barrel
+    line(sx + dir * 2, 18, sx + dir * 7, 9, STD, 3);
+    line(sx + dir * 2, 17, sx + dir * 7, 8, STL, 1);
+    ellipse(sx + dir * 7, 9, 2, 2, hot ? GLOW : RED);
+    P(sx - 6, 26, RED, 12, 1);
+  }
+  // claw arms hanging down beside the torso
+  for (const [ax, dir] of [[8, -1], [68, 1]]) {
+    rows(30, 46, () => ax - 3, () => ax + 3, ST);
+    rows(30, 46, () => ax - 3, () => ax - 2, STL);
+    P(ax - 3, 36, RED, 7, 1);
+    for (const k of [-3, 0, 3]) line(ax + k, 46, ax + k + dir, 52, STH, 2);
+  }
+  // the head: horned, armored, with a burning visor and a jaw full of steel teeth
+  rows(6, 20, y => 28 - (y - 6) * 0.15, y => 48 + (y - 6) * 0.15, ST);
+  rows(6, 8, () => 29, () => 47, STL);
+  line(28, 8, 14, 0, STL, 3); line(48, 8, 62, 0, STL, 3);     // the horns
+  line(28, 8, 14, 0, STH, 1); line(48, 8, 62, 0, STH, 1);
+  rows(13, 16, () => 29, () => 47, STD);                       // the visor slit
+  for (const ex of [32, 44]) { P(ex - 2, 14, hot ? GLOW : '#ff2a2a', 5, 2); P(ex - 1, 13, '#ff2a2a', 3, 1); }
+  rows(17, 20, () => 30, () => 46, STD);                       // the jaw
+  for (let x = 31; x <= 45; x += 2) P(x, 17, STH, 1, 2);
+  outline(g, W, H, '#14161c');
+  return scaled(c, 2);
 }
 
 // Xenomantis: a giant alien praying mantis, facing right. A long striped abdomen with its

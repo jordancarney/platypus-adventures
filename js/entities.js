@@ -1,6 +1,6 @@
 // Player, projectiles, pickups, chests, props, push blocks.
 import { TILE, PLAYER, SWORD_LOOK, SWORD_DMG, SHIELD_LOOK, ARMOR_REDUCE, SHIELD_ARC, SHIELD_SLOW, BOW_COOLDOWN, BOW_POWER,
-  ARROWS, BURN, FREEZE_TIME, CHAIN_TARGETS, BOMB_RADIUS, CRAYFISH_HEAL, DROPS, SPRINT, GOD_SWORD_LV, GOD_BEAM, KEEPSAKE_BY_ID, CRYSTAL_GOAL, tierCoins } from './config.js';
+  ARROWS, BURN, FREEZE_TIME, CHAIN_TARGETS, BOMB_RADIUS, CRAYFISH_HEAL, DROPS, SPRINT, GOD_SWORD_LV, GOD_BEAM, KEEPSAKE_BY_ID, CRYSTAL_GOAL, GLOOM, tierCoins } from './config.js';
 import { clamp, aabb, dist, dirTo, DIRS } from './util.js';
 import { T, props as tileProps } from './tiles.js';
 import { drawSprite, sprites, frameName, PUGGLE_ACCESSORIES } from './pixelart.js';
@@ -34,6 +34,9 @@ export class Entity {
 // Can this entity stand on tile id?
 export function walkable(id, e) {
   const p = tileProps(id);
+  if (p.under) return !!e.diving;              // deep water under a rock arch: divers only
+  // mid-jump (or mid-zip), sailing over holes, low walls and anything nasty underfoot
+  if (e.airborne && (p.pit || p.low || p.lava || p.deep || p.water)) return true;
   if (e.fly) return !p.solid;
   if (p.solid || p.lava || p.pit) return false;
   if (e.deepOnly) return !!p.deep;   // dolphins keep to water they can actually swim in
@@ -117,6 +120,7 @@ export class Player extends Entity {
     this.slashId = 0;           // increments per swing so each slash hits once
     this.blocking = false;
     this.swimming = false;
+    this.gloomWait = GLOOM.wait;
     this.animT = 0;
     this.moving = false;
     this.hazardT = 0;
@@ -148,6 +152,9 @@ export class Player extends Entity {
     if (Math.abs(this.knockx) < 4) this.knockx = 0;
     if (Math.abs(this.knocky) < 4) this.knocky = 0;
 
+    // a power on the go (a jump, a dash, a grapple zip, a dig) moves Gus itself
+    if (g.powerMotion(this, dt)) return;
+
     const centerTile = tileAt(g, this.cx, this.cy);
     const tp = tileProps(centerTile);
     this.swimming = !!tp.deep;
@@ -165,6 +172,7 @@ export class Player extends Entity {
     }
     let speed = this.swimming ? PLAYER.swimSpeed : PLAYER.speed;
     if (tp.slow) speed *= PLAYER.slowMult;
+    if (tp.goo) speed *= GLOOM.slow;
     if (this.blocking) speed *= SHIELD_SLOW[clamp(st.shield, 0, 6)];
     if (this.attackT > 0) speed *= 0.4;
     if (this.updateSprint(g, dt, ax, ay)) speed *= SPRINT.mult;
@@ -182,6 +190,7 @@ export class Player extends Entity {
     if (tp.dmg || tp.lava) {
       this.hurt(g, 1, this.cx, this.cy + 10, true);
     }
+    this.updateGloom(g, dt, tp.goo && !this.swimming);
 
     // actions
     if (!this.swimming) {
@@ -196,6 +205,7 @@ export class Player extends Entity {
       }
       if (input.pressed('bow') && st.bow > 0 && this.bowCd <= 0) this.shoot(g);
     }
+    if (input.pressed('power')) g.usePower(this, ax, ay);
 
     // arrow type cycling
     if (input.pressed('cycleL')) g.cycleArrow(-1);
@@ -223,6 +233,29 @@ export class Player extends Entity {
   // Sprint is a hold on the keyboard. On touch a tap *latches* it, because the right thumb
   // can't keep a button down and still reach the sword; the latch drops when Gus stops or
   // the bar runs dry, and a second tap cancels it early. Returns whether he's sprinting.
+  // Alien goo is gloom: every `tick` in it bites off a half heart for good (until he's out
+  // of it a while), with dark bubbles clinging to him. Out of the goo, after a wait, the
+  // broken hearts mend one half heart at a time.
+  updateGloom(g, dt, inGoo) {
+    const st = g.state;
+    if (inGoo) {
+      this.gooT = (this.gooT || 0) - dt;
+      if (this.gooT <= 0 && !st.god) {
+        this.gooT = GLOOM.tick;
+        audio.sfx('goo');
+        g.burst(this.cx, this.cy - 4, '#7a2a9a', 6);
+        g.addGloom(1);
+      }
+      if (Math.random() < dt * 14) g.addParticle(this.cx + (Math.random() - 0.5) * 12, this.bottom - 2, Math.random() < 0.5 ? '#3a0a4a' : '#8aff6a', 0.5, 0, -18, 1);
+      return;
+    }
+    this.gooT = 0;
+    if (!st.gloom) return;
+    if ((this.gloomWait -= dt) > 0) return;
+    this.gloomWait = GLOOM.fade;
+    st.gloom--;
+    if (!st.gloom) { audio.sfx('heart'); g.toast('Your hearts are mended!'); }
+  }
   updateSprint(g, dt, ax, ay) {
     const sp = g.sprint;
     if (touch.pressed('sprint')) sp.latch = !sp.latch;
@@ -286,6 +319,8 @@ export class Player extends Entity {
   // returns true if damage was actually taken
   hurt(g, dmg, sx, sy, isHazard = false) {
     if (this.iframes > 0 || g.state.god) return false;
+    // dashing, zipping on the grapple or deep under the water: nothing can touch him
+    if (this.dash || this.zip || this.diving) return false;
     // shield block: attack must come from the front
     if (this.blocking && !isHazard) {
       const [fx, fy] = DIRS[this.facing];
@@ -315,17 +350,26 @@ export class Player extends Entity {
 
   draw(g, ctx) {
     if (this.iframes > 0 && Math.floor(g.time * 14) % 2 === 0 && g.state.hp > 0) return;
-    const cx = this.cx, by = this.bottom + 3;
+    if (g.drawPowerPose(this, ctx)) return;
+    const cx = this.cx, ground = this.bottom + 3, by = ground - (this.z || 0);
     const st = g.state;
     let name = 'gus_idle';
-    if (this.swimming) name = 'gus_swim';
+    if (this.swimming && !this.airborne) name = 'gus_swim';
     else if (this.moving) name = Math.floor(this.animT * 8) % 2 ? 'gus_walk1' : 'gus_walk2';
-    if (!this.swimming) {
+    if (!this.swimming || this.airborne) {
+      // the shadow stays on the ground while he's up in the air
       ctx.fillStyle = '#25324155';
-      ctx.fillRect(Math.round(cx) - 5, Math.round(by) - 2, 10, 2);
-      ctx.fillRect(Math.round(cx) - 3, Math.round(by), 6, 1);
+      ctx.fillRect(Math.round(cx) - 5, Math.round(ground) - 2, 10, 2);
+      ctx.fillRect(Math.round(cx) - 3, Math.round(ground), 6, 1);
+    }
+    // a dash leaves a streak of ghost-Gus behind him
+    if (this.dash) {
+      ctx.save(); ctx.globalAlpha = 0.3;
+      drawSprite(ctx, name, cx - this.dash.dx * 8, by - this.dash.dy * 6, { flip: this.flip, tint: '#ffb84a' });
+      ctx.restore();
     }
     drawSprite(ctx, name, cx, by, { flip: this.flip });
+    g.drawDig(this, ctx, by);
     // worn armor is a real overlay on the same grid; skipped while swimming since the
     // swim sprite is a different pose
     if (st.armor > 0 && !this.swimming) drawSprite(ctx, 'armor' + st.armor, cx, by, { flip: this.flip });
@@ -595,7 +639,7 @@ export class EnemyShot extends Entity {
 }
 
 // ---------------------------------------------------------------- PICKUPS
-const PICKUP_SPRITES = { coin: 'coin', diamond: 'diamond', crayfish: 'crayfish', arrows: 'arrows', shard: 'shard', crystal: 'godcrystal' };
+const PICKUP_SPRITES = { coin: 'coin', diamond: 'diamond', crayfish: 'crayfish', arrows: 'arrows', shard: 'shard', crystal: 'godcrystal', suncray: 'suncray', royalgem: 'royalgem' };
 export class Pickup extends Entity {
   constructor(x, y, kind, amount = 1) {
     super(x - 4, y - 4, 8, 8);
@@ -605,7 +649,7 @@ export class Pickup extends Entity {
     this.z = 0; this.vz = 60 + Math.random() * 40;
     this.age = 0;
     // god crystals hang about longer: a zombie drops a whole handful at once
-    this.life = kind === 'shard' ? Infinity : kind === 'crystal' ? 30 : 14;
+    this.life = kind === 'shard' || kind === 'suncray' || kind === 'royalgem' ? Infinity : kind === 'crystal' ? 30 : 14;
   }
   update(g, dt) {
     this.age += dt; this.life -= dt;
@@ -634,7 +678,7 @@ export class Pickup extends Entity {
       case 'coin': st.coins += this.amount; audio.sfx('coin'); break;
       case 'diamond': st.diamonds += this.amount; audio.sfx('gem'); break;
       case 'crayfish':
-        st.hp = Math.min(st.maxHp, st.hp + CRAYFISH_HEAL);
+        g.heal(CRAYFISH_HEAL);
         audio.sfx('cray');
         g.toast('Crayfish! Yum. +2 hearts');
         break;
@@ -643,17 +687,26 @@ export class Pickup extends Entity {
         audio.sfx('blip');
         break;
       case 'shard': g.onShardCollected(); break;
+      case 'royalgem': g.onRoyalGem(); break;
+      case 'suncray': {
+        const had = st.gloom > 0;
+        st.gloom = 0;
+        g.heal(4);
+        audio.sfx('heart');
+        g.toast(had ? 'A golden crayfish! The goo lets go of your hearts!' : 'A golden crayfish! Yum! +2 hearts');
+        break;
+      }
       case 'crystal': g.onCrystalCollected(this.amount); break;
     }
     g.burst(this.cx, this.cy, this.kind === 'diamond' ? '#6ae0f0' : this.kind === 'shard' ? '#fff' : this.kind === 'crystal' ? '#9aff6a' : '#f0c83a', 5);
   }
   draw(g, ctx) {
     const bob = Math.sin(g.time * 4 + this.id) * 1.5;
-    if (this.kind === 'shard') {
+    if (this.kind === 'shard' || this.kind === 'suncray' || this.kind === 'royalgem') {
       ctx.save();
       ctx.globalAlpha = 0.35 + 0.2 * Math.sin(g.time * 5);
-      ctx.fillStyle = '#fff';
-      ctx.beginPath(); ctx.arc(this.cx, this.cy - 4 + bob, 9, 0, 7); ctx.fill();
+      ctx.fillStyle = this.kind === 'suncray' ? '#ffe070' : this.kind === 'royalgem' ? '#ff9ad8' : '#fff';
+      ctx.beginPath(); ctx.arc(this.cx, this.cy - 4 + bob, this.kind === 'suncray' ? 7 : 9, 0, 7); ctx.fill();
       ctx.restore();
     }
     if (this.life < 3 && Math.floor(g.time * 8) % 2 === 0) return;
@@ -686,15 +739,39 @@ export class Chest extends Entity {
   interact(g) {
     if (this.opened) { g.toast('Empty.'); return; }
     this.opened = true;
+    this.openT = 1.2;
     g.state.flags[this.chestId] = true;
     audio.sfx('chest');
+    g.burst(this.cx, this.y, '#fff2a0', 14);
     g.grantContents(this.contents, this.msg);
   }
+  update(g, dt) {
+    if (this.openT > 0) {
+      this.openT -= dt;
+      if (Math.random() < dt * 30) g.addParticle(this.cx + (Math.random() - 0.5) * 12, this.y + 2, Math.random() < 0.5 ? '#fff2a0' : '#f0c83a', 0.8, (Math.random() - 0.5) * 10, -40, 1);
+    }
+  }
   draw(g, ctx) {
-    drawSprite(ctx, this.opened ? 'chest_open' : 'chest', this.cx, this.bottom);
+    // just opened: a column of golden light pours up out of it
+    if (this.openT > 0) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, this.openT) * 0.35;
+      ctx.fillStyle = '#fff2a0';
+      ctx.fillRect(Math.round(this.cx) - 5, this.y - 26, 10, 28);
+      ctx.globalAlpha *= 0.6;
+      ctx.fillRect(Math.round(this.cx) - 8, this.y - 18, 16, 20);
+      ctx.restore();
+    }
+    drawSprite(ctx, this.opened ? 'chest_open' : 'chest', this.cx, this.bottom + 1);
     if (!this.opened) {
-      const tw = Math.sin(g.time * 3 + this.id) > 0.6;
-      if (tw) { ctx.fillStyle = '#fff8d0'; ctx.fillRect(this.cx + 4, this.y - 2, 2, 2); }
+      // a star of light winks across the gold now and then
+      const k = (g.time * 0.6 + this.id * 0.31) % 1;
+      if (k < 0.18) {
+        const a = Math.sin(k / 0.18 * Math.PI), sx = Math.round(this.cx - 5 + k * 50), sy = this.y - 1;
+        ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = '#fffbe0';
+        ctx.fillRect(sx, sy - 2, 1, 5); ctx.fillRect(sx - 2, sy, 5, 1);
+        ctx.restore();
+      }
     }
   }
 }
@@ -979,19 +1056,28 @@ export class Puggle extends Entity {
 export class HomePuggle extends Entity {
   constructor(id, x, y) {
     super(x - 5, y - 4, 10, 8);
+    this.pid = id;
     this.look = puggleLook(id);
     this.z = 0; this.vz = 0;
     this.hopT = Math.random() * 2.5;
     this.flip = Math.random() < 0.5;
+    this.happyT = 0;
+    this.shy = 6;          // a chest or a sign right beside one still gets Gus's E first
   }
+  interact(g) { g.puggleChat(this); }
   update(g, dt) {
     if (this.z > 0 || this.vz > 0) {
       this.z += this.vz * dt; this.vz -= 300 * dt;
       if (this.z <= 0) { this.z = 0; this.vz = 0; }
     } else if ((this.hopT -= dt) <= 0) {
-      this.hopT = 0.8 + Math.random() * 2.6;
+      this.hopT = (this.happyT > 0 ? 0.15 : 0.8) + Math.random() * (this.happyT > 0 ? 0.3 : 2.6);
       this.vz = 40 + Math.random() * 30;
     }
+    // petted: hearts float up while it bounces about
+    this.happyT = Math.max(0, this.happyT - dt);
+    if (this.happyT > 0 && Math.random() < dt * 6) g.addParticle(this.cx + (Math.random() - 0.5) * 6, this.y - 6, '#ff8ab8', 0.7, (Math.random() - 0.5) * 10, -20, 2);
+    // a game of fetch or tag at Mama's
+    if (this.isBrood && g.puggleGameStep(this, dt)) return;
     const p = g.player;
     if (dist(this.cx, this.cy, p.cx, p.cy) < 90) this.flip = p.cx < this.cx;
   }
@@ -999,6 +1085,8 @@ export class HomePuggle extends Entity {
     ctx.fillStyle = '#25324144';
     ctx.fillRect(Math.round(this.cx) - 3, Math.round(this.bottom), 6, 1);
     drawPuggle(ctx, this.look, this.cx, this.bottom + 1 - this.z, { flip: this.flip, waddle: this.z > 0 });
+    // caught in tag: a little star over its head
+    if (this.tagged) { ctx.fillStyle = '#ffe95c'; ctx.fillRect(Math.round(this.cx) - 1, Math.round(this.y - 10 - this.z), 3, 3); }
   }
 }
 

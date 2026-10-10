@@ -13,9 +13,17 @@ import { drawSprite, sprites } from './pixelart.js';
 import { audio } from './audio.js';
 
 // ---------------------------------------------------------------- MUM AND DAD
-// Freed from Apexus's jail, they follow Gus everywhere but indoors and pitch in on every
-// fight: Dad up close with his sword, Mum from range with her bow (and a crayfish for Gus
-// when his hearts run low). Friends, so nothing can hurt them and enemies ignore them.
+// Freed from Apexus's jail, they come along on Gus's adventures (everywhere but indoors),
+// but they've got minds of their own. They run off to fight any monster nearby and come
+// back after: Dad up close with his sword, Mum from range with her bow (and a crayfish for
+// Gus when his hearts run low). When Gus stands about, they poke around and sometimes turn
+// up treasure. Talk to one to have them wait where they are, or go home; now and then one
+// decides to stay home anyway. Friends, so nothing can hurt them and enemies ignore them.
+//
+// Where each one is lives in state.family[who]: { mode: 'follow' | 'home' } or
+// { mode: 'wait', area, x, y }.
+const HUNT = 200;          // how far from Gus (or their waiting spot) they'll run to fight
+const ROAM = 64;           // how far they wander looking for treasure
 export class Guardian extends Entity {
   constructor(who, x, y) {
     super(x - 5, y - 4, 10, 8);
@@ -37,8 +45,27 @@ export class Guardian extends Entity {
     this.swimming = false;
     this.path = null;          // tile centers to walk through, from findPath
     this.pathT = 0;
+    this.post = null;          // where they're waiting, when Gus asked them to
+    this.shy = 14;             // a chest or a sign right beside them gets Gus's E first
+    this.gusIdle = 0;          // how long Gus has been standing still
+    this.roam = null; this.roamT = 0; this.pauseT = 0;
+    this.findT = 10 + Math.random() * 12;
   }
   hurt() { /* nothing in the Vale can hurt a River Guardian twice */ }
+
+  interact(g) {
+    const waiting = !!this.post;
+    const say = (mode, line) => () => { setFamily(g, this, mode); g.toast(`${this.name}: ${line}`); };
+    const hi = waiting
+      ? (this.who === 'dad' ? 'Ready to go, son?' : 'There you are, sweetheart! Off we go?')
+      : (this.who === 'dad' ? 'What do you need, son?' : 'What is it, sweetheart?');
+    g.openDialog(this.name, hi, null, [
+      waiting ? { label: 'Come with me', fn: say('follow', 'Right behind you!') }
+        : { label: 'Wait here', fn: say('wait', "I'll be right here.") },
+      { label: 'Go home', fn: say('home', 'See you at home!') },
+      { label: waiting ? 'Keep waiting' : 'Never mind', fn: () => {} },
+    ]);
+  }
 
   update(g, dt) {
     const p = g.player, st = g.state;
@@ -58,28 +85,64 @@ export class Guardian extends Entity {
     // Gus went on ahead (another room, or just far): catch up in a blink
     const room = g.area.type === 'dungeon' && g.curRoom ? g.roomBoundsPx(g.curRoom) : null;
     const dP = dist(this.cx, this.cy, p.cx, p.cy);
-    if (dP > 260 || (room && !inBounds(this, room))) { this.catchUp(g); return; }
+    if (!this.post && (dP > 280 || (room && !inBounds(this, room)))) { this.catchUp(g); return; }
 
-    if (this.who === 'mum') this.watchHearts(g, dt);
+    this.gusIdle = p.moving ? 0 : this.gusIdle + dt;
+    if (this.who === 'mum' && dP < 160) this.watchHearts(g, dt);
 
-    const foe = this.pickFoe(g, room);
-    if (foe) this.fight(g, foe, dt);
-    else this.follow(g, dt);
+    const home = this.post || { x: p.cx, y: p.cy };
+    const foe = this.pickFoe(g, room, home);
+    if (foe) { this.roam = null; this.fight(g, foe, dt); }
+    else if (this.post) this.explore(g, dt, this.post, ROAM * 0.6);
+    else if (this.gusIdle > 1.5) this.explore(g, dt, home, ROAM);
+    else { this.roam = null; this.follow(g, dt); }
     this.animT += dt * (this.moving ? 1 : 0.4);
   }
 
-  // the nearest enemy close to both of them, that isn't hiding
-  pickFoe(g, room) {
-    const p = g.player;
+  // the nearest monster within reach of Gus (or of where they're waiting) that isn't hiding
+  pickFoe(g, room, home) {
     let best = null, bestD = Infinity;
     for (const e of g.enemies()) {
       if (e.hidden || e.submerged || e.riseT > 0) continue;
       if (room && !inBounds(e, room)) continue;
       const d = dist(this.cx, this.cy, e.cx, e.cy);
-      if (d > 130 || dist(p.cx, p.cy, e.cx, e.cy) > 170) continue;
+      if (d > HUNT + 40 || dist(home.x, home.y, e.cx, e.cy) > HUNT) continue;
       if (d < bestD) { bestD = d; best = e; }
     }
     return best;
+  }
+
+  // Poke about near `home`: amble to a spot, stop and look around, pick another. Every so
+  // often there's something there.
+  explore(g, dt, home, radius) {
+    this.roamT -= dt;
+    if (!this.roam || this.roamT <= 0 || dist(this.roam.x, this.roam.y, home.x, home.y) > radius * 1.5) {
+      const a = Math.random() * Math.PI * 2, r = radius * (0.35 + Math.random() * 0.65);
+      this.roam = openSpotNear(g, home.x + Math.cos(a) * r, home.y + Math.sin(a) * r, this) || { x: home.x, y: home.y };
+      this.roamT = 4 + Math.random() * 3;
+    }
+    if (this.pauseT > 0) {
+      this.pauseT -= dt;
+      if (Math.random() < dt * 0.8) this.flip = !this.flip;     // looking this way and that
+    } else if (dist(this.cx, this.cy, this.roam.x, this.roam.y) > 4) {
+      this.walkTo(g, this.roam.x, this.roam.y, 42, dt);
+    } else {
+      this.pauseT = 0.8 + Math.random() * 1.6;
+      this.roam = null;
+    }
+    if ((this.findT -= dt) <= 0) { this.findT = 16 + Math.random() * 16; this.findSomething(g); }
+  }
+
+  findSomething(g) {
+    const st = g.state, r = Math.random();
+    let kind = 'coin', amount = 3 + Math.floor(Math.random() * 6), what = `${amount} coins`;
+    if (r < 0.12) { kind = 'diamond'; amount = 1; what = 'a diamond'; }
+    else if (r < 0.32 && st.hp < g.hpCap()) { kind = 'crayfish'; amount = 1; what = 'a crayfish'; }
+    else if (r < 0.48 && st.bow && st.arrows.ammo < st.arrows.cap) { kind = 'arrows'; amount = 5; what = 'some arrows'; }
+    g.spawn(new Pickup(this.cx, this.cy - 4, kind, amount));
+    g.burst(this.cx, this.cy - 8, '#ffe95c', 8);
+    audio.sfx('key');
+    g.toast(`${this.name} found ${what}!`);
   }
 
   fight(g, foe, dt) {
@@ -122,7 +185,12 @@ export class Guardian extends Entity {
     const p = g.player;
     const [fx, fy] = DIRS[p.facing] || [0, 1];
     const side = this.who === 'dad' ? -1 : 1;
-    const tx = p.cx - fx * 18 + -fy * side * 14, ty = p.cy - fy * 16 + fx * side * 10;
+    let tx = p.cx - fx * 18 + -fy * side * 14, ty = p.cy - fy * 16 + fx * side * 10;
+    // that spot's in a tree or a wall: the nearest open one will do (or Gus's own)
+    if (!walkable(g.area.get(Math.floor(tx / TILE), Math.floor(ty / TILE)), this)) {
+      const spot = openSpotNear(g, tx, ty, this, 1);
+      [tx, ty] = spot ? [spot.x, spot.y] : [p.cx, p.cy];
+    }
     const d = dist(this.cx, this.cy, tx, ty);
     if (d > 8) this.walkTo(g, tx, ty, Math.min(PLAYER.speed * 1.5, 40 + d * 3), dt);
     else { this.stuckT = 0; this.flip = p.cx < this.cx; }
@@ -179,10 +247,22 @@ export class Guardian extends Entity {
     if (r.hitY && !r.hitX && Math.abs(dx) < 0.3) moveEntity(g, this, (dx >= 0 ? 1 : -1) * spd * dt, 0);
     this.moving = true;
     if (Math.abs(dx) > 0.2) this.flip = dx < 0;
-    // wedged on a tree or a wall for too long: give up and pop back beside Gus
+    // caught on a corner: shuffle back toward the middle of the tile they're on, which
+    // lines them up with the gap again
+    if (r.hitX && r.hitY) {
+      const mx = Math.floor(this.cx / TILE) * TILE + 8, my = Math.floor(this.cy / TILE) * TILE + 8;
+      const [ux, uy] = dirTo(this.cx, this.cy, mx, my);
+      moveEntity(g, this, ux * spd * dt, uy * spd * dt);
+    }
+    // wedged for too long anyway: give up on that spot. Waiting or wandering, pick
+    // another; following, pop back beside Gus.
     const after = dist(this.cx, this.cy, tx, ty);
     if (after > before - spd * dt * 0.25) this.stuckT += dt; else this.stuckT = Math.max(0, this.stuckT - dt);
-    if (this.stuckT > 1.2 && !this.goal && dist(this.cx, this.cy, g.player.cx, g.player.cy) > 40) this.catchUp(g);
+    if (this.stuckT > 0.9 && !this.goal) {
+      this.stuckT = 0; this.path = null;
+      if (this.roam) { this.roam = null; this.pauseT = 0.5; }
+      else if (!this.post && dist(this.cx, this.cy, g.player.cx, g.player.cy) > 30) this.catchUp(g);
+    }
   }
 
   // Pop in next to Gus, on the nearest open tile behind him.
@@ -249,10 +329,10 @@ export class Guardian extends Entity {
 const inBounds = (e, b) => e.cx >= b.x && e.cx < b.x + b.w && e.cy >= b.y && e.cy < b.y + b.h;
 
 // The nearest tile (rings outward) that `e` can stand on, near a pixel point.
-function openSpotNear(g, x, y, e) {
+function openSpotNear(g, x, y, e, from = 0) {
   const tx0 = Math.floor(x / TILE), ty0 = Math.floor(y / TILE);
   const room = g.area.type === 'dungeon' && g.curRoom ? g.roomBoundsPx(g.curRoom) : null;
-  for (let r = 0; r <= 6; r++) {
+  for (let r = from; r <= 6; r++) {
     for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
       if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
       const tx = tx0 + dx, ty = ty0 + dy;
@@ -266,19 +346,60 @@ function openSpotNear(g, x, y, e) {
   return null;
 }
 
-// Mum and Dad come along into every area but the houses (once they're free).
-export function spawnFamily(g) {
+const familyOf = (g, who) => {
+  const st = g.state;
+  if (!st.family) st.family = {};
+  return st.family[who] || (st.family[who] = { mode: 'follow' });
+};
+
+// Mum and Dad come along into every area but the houses (once they're free), unless one's
+// at home or waiting somewhere else. Stepping out of the burrow, one of them sometimes
+// decides to stay in.
+export function spawnFamily(g, from) {
   if (!g.state.flags.parents_free || g.area.type === 'house' || g.area.noFamily) return;
+  if (from === 'house_gus' && Math.random() < 0.2) {
+    const who = Math.random() < 0.5 ? 'dad' : 'mum';
+    if (familyOf(g, who).mode === 'follow') {
+      g.state.family[who] = { mode: 'home' };
+      g.toast(who === 'dad' ? "Dad: I'll stay home this time. Come get me if you need me!" : "Mum: I'm staying in today, sweetheart. Come get me if you need me!");
+    }
+  }
   for (const who of ['dad', 'mum']) {
+    const f = familyOf(g, who);
+    if (f.mode === 'home' || (f.mode === 'wait' && f.area !== g.area.id)) continue;
     const gd = new Guardian(who, g.player.cx, g.player.cy);
-    const spot = openSpotNear(g, g.player.cx + (who === 'dad' ? -14 : 14), g.player.cy + 8, gd);
-    if (spot) { gd.x = spot.x - gd.w / 2; gd.y = spot.y - gd.h / 2; }
+    if (f.mode === 'wait') {
+      gd.post = { x: f.x, y: f.y };
+      gd.x = f.x - gd.w / 2; gd.y = f.y - gd.h / 2;
+    } else {
+      const spot = openSpotNear(g, g.player.cx + (who === 'dad' ? -14 : 14), g.player.cy + 8, gd);
+      if (spot) { gd.x = spot.x - gd.w / 2; gd.y = spot.y - gd.h / 2; }
+    }
     g.ents.push(gd);
   }
 }
+
+// Tell Mum or Dad what to do. `gd` is them out in the world, if they're here.
+export function setFamily(g, gd, mode) {
+  const who = gd.who || gd;
+  familyOf(g, who);
+  if (mode === 'wait') {
+    g.state.family[who] = { mode, area: g.area.id, x: gd.cx, y: gd.cy };
+    gd.post = { x: gd.cx, y: gd.cy };
+  } else {
+    g.state.family[who] = { mode };
+    if (gd.post) gd.post = null;
+    if (mode === 'home' && gd instanceof Guardian) {
+      gd.dead = true;
+      g.burst(gd.cx, gd.cy - 4, who === 'dad' ? '#d8483a' : '#b05ad8', 10);
+      audio.sfx('warp');
+    }
+  }
+  g.save();
+}
 // after a room slide, bring them through the door with Gus
 export function regroupFamily(g) {
-  for (const e of g.ents) if (e instanceof Guardian && !e.goal) e.catchUp(g);
+  for (const e of g.ents) if (e instanceof Guardian && !e.goal && !e.post) e.catchUp(g);
 }
 
 // ---------------------------------------------------------------- JAIL CAGE
@@ -534,6 +655,9 @@ export function buildGooLands(region) {
     disc(cx, cy, rad, (x, y) => set(x, y, T.GOO));
     spawners.push({ tx: cx, ty: cy, x: cx * TILE + 8, y: cy * TILE + 8, types: ZOMBIE_TYPES, respawn: true });
   }
+  // a clear spring near the bridge, and golden crayfish in it to fix goo-broken hearts
+  disc(52, 33, 2.4, (x, y) => set(x, y, T.SHALLOW));
+  disc(52, 33, 1.3, (x, y) => set(x, y, T.DEEP));
   // borders: alien cliffs north, west and south; the Great Chasm along the east, the bridge across
   for (let x = 0; x < W; x++) for (let d = 0; d < 2; d++) { set(x, d, T.XCLIFF); set(x, H - 1 - d, T.XCLIFF); }
   for (let y = 0; y < H; y++) for (let d = 0; d < 2; d++) set(d, y, T.XCLIFF);
@@ -560,6 +684,8 @@ export function buildGooLands(region) {
     { kind: 'building', sprite: 'hive_ext', tx: hx, ty: hy, w: 7, h: 4, spores: true },
     { kind: 'dungeon', tx: dx, ty: dy, id: 'hive' },
     { kind: 'barrier', tx: dx, ty: dy },
+    { kind: 'suncray', tx: 51, ty: 33 }, { kind: 'suncray', tx: 53, ty: 34 },
+    { kind: 'sign', tx: 55, ty: 30, text: 'THE CLEAR SPRING.|Golden crayfish live here. Eat one to mend hearts the goo has broken!' },
   ];
   for (const p of props) if (p.kind !== 'building' && p.kind !== 'dungeon') {
     // nothing stands on a rock or spire

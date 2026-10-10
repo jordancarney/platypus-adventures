@@ -10,6 +10,7 @@
 import { VIEW_W, VIEW_H } from './config.js';
 import { drawSprite, frameName } from './pixelart.js';
 import { drawPuggle, puggleLook } from './entities.js';
+import { MECHA_ART } from './endart.js';
 import { drawText, wrapText } from './font.js';
 import { touch } from './touch.js';
 import { audio } from './audio.js';
@@ -152,7 +153,7 @@ const INTRO = [
     },
   },
   {
-    dur: 6, music: 'boss',
+    dur: 6, music: 'xeno',
     caption: 'XENOMANTIS! A giant alien bug, leaving sticky alien GOO everywhere it crawled.',
     events: [[0.5, () => audio.sfx('roar')], [2.2, () => audio.sfx('roar')]],
     draw(ctx, t, time) {
@@ -170,7 +171,7 @@ const INTRO = [
     },
   },
   {
-    dur: 7, music: 'boss',
+    dur: 7, music: 'xeno',
     caption: 'Mum and Dad fought bravely... but the alien was just too strong.',
     events: [[0.9, () => audio.sfx('arrow')], [1.3, () => audio.sfx('slash')], [1.5, () => audio.sfx('hit')], [1.7, () => audio.sfx('arrow')],
       [2.0, () => audio.sfx('slash')], [3.0, () => audio.sfx('roar')], [3.2, () => audio.sfx('hurt')], [4.2, () => audio.sfx('splash')]],
@@ -340,7 +341,7 @@ const RESCUE = [
     },
   },
   {
-    dur: 6.5, music: 'boss',
+    dur: 6.5, music: 'sharks',
     caption: 'Then Gus heard someone panicking out in the water...',
     events: [[0.6, () => audio.sfx('splash')], [2.2, () => audio.sfx('splash')], [3.8, () => audio.sfx('splash')]],
     draw(ctx, t, time) {
@@ -384,32 +385,59 @@ function storm(ctx, time, t) {
 }
 const MECHA = [
   {
-    dur: 8, music: 'boss',
+    dur: 8, music: 'boss_apexus',
     caption: 'Far, far away, the whole world was under attack by... MECHA APEXUS!',
     events: [[0.8, () => audio.sfx('roar')], [2.6, () => audio.sfx('boom')], [4.4, () => audio.sfx('boom')], [5.2, () => audio.sfx('roar')]],
     draw(ctx, t, time) {
       storm(ctx, time, t);
       const rise = clamp(t / 3, 0, 1);
       const bob = Math.sin(time * 2) * 3;
+      const top = 172 + (1 - rise) * 120 + bob - MECHA_ART.h, left = 200 - MECHA_ART.w / 2;
+      const at = ([x, y]) => [left + x, top + y];
       ctx.save();
       ctx.beginPath(); ctx.rect(0, 0, VIEW_W, 158); ctx.clip();
-      big(ctx, frameName('mecha_apexus', time * 4), 200, 172 + (1 - rise) * 120 + bob, 2);
-      ctx.restore();
-      // the eyes burn (they sit on the chimera map's row 8, columns 7 and 18, drawn at 4x)
+      // a red glow of menace behind him
+      ctx.globalAlpha = 0.25 + 0.1 * Math.sin(time * 4);
+      ctx.fillStyle = '#ff2a2a';
+      ctx.beginPath(); ctx.ellipse(200, top + 60, 90, 70, 0, 0, 7); ctx.fill();
+      ctx.globalAlpha = 1;
+      big(ctx, frameName('mecha_apexus', time * 4), 200, top + MECHA_ART.h, 1);
       if (rise >= 1) {
-        ctx.save();
-        ctx.globalAlpha = 0.4 + 0.3 * Math.sin(time * 9);
+        // the reactor throbs and the visor burns
+        ctx.globalAlpha = 0.35 + 0.25 * Math.sin(time * 9);
+        ctx.fillStyle = '#ffa040';
+        const [cx, cy] = at(MECHA_ART.core);
+        ctx.beginPath(); ctx.arc(cx, cy, 14, 0, 7); ctx.fill();
         ctx.fillStyle = '#ff2a2a';
-        for (const ex of [178, 222]) { ctx.beginPath(); ctx.arc(ex, 126 + bob, 6, 0, 7); ctx.fill(); }
-        ctx.restore();
+        for (const e of MECHA_ART.eyes) { const [ex, ey] = at(e); ctx.beginPath(); ctx.arc(ex, ey, 7, 0, 7); ctx.fill(); }
+        ctx.globalAlpha = 1;
+        // the shoulder cannons blast lasers into the sky, one then the other
+        const k = (t - 3.4) % 1.2;
+        if (t > 3.4 && k < 0.3) {
+          const [gx, gy] = at(MECHA_ART.guns[Math.floor((t - 3.4) / 1.2) % 2]);
+          const dir = gx < 200 ? -1 : 1;
+          ctx.globalAlpha = 1 - k / 0.3;
+          ctx.strokeStyle = '#ff4a3a'; ctx.lineWidth = 4;
+          ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(gx + dir * 120, gy - 140); ctx.stroke();
+          ctx.strokeStyle = '#fff0a0'; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(gx + dir * 120, gy - 140); ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+        // sparks crackle off the armor
+        ctx.fillStyle = '#fff0a0';
+        for (let i = 0; i < 4; i++) {
+          const ph = (time * 3 + i * 0.37) % 1;
+          if (ph < 0.15) ctx.fillRect(Math.round(left + 20 + ((i * 53 + Math.floor(time * 3) * 31) % 110)), Math.round(top + 30 + ((i * 29) % 60)), 2, 2);
+        }
       }
+      ctx.restore();
       // lightning
-      for (const at of [2.6, 4.4]) {
-        if (t > at && t < at + 0.25) {
+      for (const at2 of [2.6, 4.4]) {
+        if (t > at2 && t < at2 + 0.25) {
           ctx.fillStyle = '#ffffff99'; ctx.fillRect(0, 0, VIEW_W, CAPTION_Y - 6);
           ctx.fillStyle = '#ffffff';
-          let lx = at === 2.6 ? 70 : 330, ly = 0;
-          while (ly < 140) { const nx = lx + (Math.sin(ly * 7 + at) * 14); ctx.fillRect(Math.round(Math.min(lx, nx)), ly, Math.abs(nx - lx) + 2, 12); lx = nx; ly += 12; }
+          let lx = at2 === 2.6 ? 70 : 330, ly = 0;
+          while (ly < 140) { const nx = lx + (Math.sin(ly * 7 + at2) * 14); ctx.fillRect(Math.round(Math.min(lx, nx)), ly, Math.abs(nx - lx) + 2, 12); lx = nx; ly += 12; }
         }
       }
       if (t > 3.4) drawText(ctx, 'MECHA APEXUS', VIEW_W / 2, 14, { scale: 3, align: 'center', color: '#ff4a3a', alpha: clamp((t - 3.4) * 2, 0, 1) });
@@ -421,17 +449,17 @@ const MECHA = [
       ctx.fillStyle = '#05060a'; ctx.fillRect(0, 0, VIEW_W, VIEW_H);
       stars(ctx, time, 50);
       const a = clamp((t - 0.6) / 1.4, 0, 1);
-      drawText(ctx, 'TO BE', VIEW_W / 2, 74, { scale: 4, align: 'center', color: '#f0c83a', alpha: a });
-      drawText(ctx, 'CONTINUED...', VIEW_W / 2, 112, { scale: 4, align: 'center', color: '#f0c83a', alpha: a });
+      drawText(ctx, 'TO BE', VIEW_W / 2, 46, { scale: 4, align: 'center', color: '#f0c83a', alpha: a });
+      drawText(ctx, 'CONTINUED...', VIEW_W / 2, 82, { scale: 4, align: 'center', color: '#f0c83a', alpha: a });
+      const a2 = clamp((t - 1.6) / 1.2, 0, 1);
+      drawText(ctx, 'IN PLATYPUS ADVENTURES 2', VIEW_W / 2, 124, { scale: 2, align: 'center', color: '#ffffff', alpha: a2 });
       // the heroes, small, looking out at what's coming
       const k = clamp((t - 2.4) / 1, 0, 1);
       if (k > 0) {
         ctx.save();
         ctx.globalAlpha = k;
-        big(ctx, 'dad_home', 168, 196, 2, { flip: false });
-        big(ctx, 'gus_idle', 200, 196, 2, {});
-        big(ctx, 'mum_home', 232, 196, 2, {});
-        big(ctx, 'dolphin', 276, 194, 2, { flip: true });
+        big(ctx, 'gus_idle', 182, 196, 2, {});
+        big(ctx, 'dolphin', 226, 194, 2, { flip: true });
         ctx.restore();
       }
     },

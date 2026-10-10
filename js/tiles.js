@@ -27,6 +27,13 @@ export const T = {
   // area, alien goo, the Goo Lands' ground and rocks, and the Star Hive's grand staircase
   PIT: 59, PASSAGE: 60, GOO: 61, XSOIL: 62, XSOIL2: 63, XROCK: 64, XSPIRE: 65, XPLANT: 66,
   XCLIFF: 67, STEPS: 68,
+  // the Platypus Kingdom and its powers: soft dirt worth digging, a dirt heap the shovel
+  // clears, rubble a dash smashes, a low wall to jump, a rock arch over water to dive
+  // under, a grapple post, a timer plate, Castle Mirri's stonework, and a freshly dug hole
+  MOUND: 69, DIRTPILE: 70, RUBBLE: 71, LOWWALL: 72, UNDERPASS: 73, POST: 74, QPLATE: 75,
+  CWALL: 76, CTOP: 77, CFLOOR: 78, DUG: 79,
+  // the great ocean round the Vale: open sea, the reef shallows, and coral
+  OCEAN: 80, REEF: 81, CORAL: 82,
 };
 
 // ---------- tile properties ----------
@@ -57,6 +64,13 @@ def(T.HBEAM, { solid: true }); def(T.RUG, {}); def(T.EXIT, {});
 def(T.PIT, { pit: true }); def(T.PASSAGE, {}); def(T.GOO, { goo: true });
 def(T.XSOIL, {}); def(T.XSOIL2, {}); def(T.XROCK, { solid: true }); def(T.XSPIRE, { solid: true });
 def(T.XPLANT, {}); def(T.XCLIFF, { solid: true }); def(T.STEPS, {});
+// dig: the shovel turns it over · heap: the shovel clears it · rubble: a dash smashes it ·
+// low: solid, but a jump clears it · under: deep water under rock, passable only diving ·
+// post: a grapple hook catches on it
+def(T.MOUND, { dig: true }); def(T.DIRTPILE, { solid: true, heap: true }); def(T.RUBBLE, { solid: true, rubble: true });
+def(T.LOWWALL, { solid: true, low: true }); def(T.UNDERPASS, { deep: true, under: true }); def(T.POST, { solid: true, post: true });
+def(T.OCEAN, { deep: true }); def(T.REEF, { water: true, slow: true }); def(T.CORAL, { solid: true });
+def(T.QPLATE, {}); def(T.CWALL, { solid: true }); def(T.CTOP, { solid: true }); def(T.CFLOOR, {}); def(T.DUG, {});
 
 // ---------- dungeon themes ----------
 export const THEMES = {
@@ -71,6 +85,12 @@ export const THEMES = {
   // the Goo Lands (an outdoor area: its pit lips borrow these) and Xenomantis's Star Hive
   goo:   { floor: '#2e2640', floor2: '#383050', wall: '#4a3a5e', wallTop: '#685482', accent: '#8aff6a' },
   hive:  { floor: '#1e2c26', floor2: '#283a30', wall: '#3a2848', wallTop: '#5a4270', accent: '#9aff5a' },
+  // the Platypus Kingdom's five power dungeons
+  mine:    { floor: '#4a3828', floor2: '#584232', wall: '#6a4a30', wallTop: '#8a6640', accent: '#e0b060' },
+  pits:    { floor: '#3a4a5c', floor2: '#44566a', wall: '#56708a', wallTop: '#7894b0', accent: '#a8e0ff' },
+  ruins:   { floor: '#4c4438', floor2: '#5a5040', wall: '#76664e', wallTop: '#988668', accent: '#ffb84a' },
+  drowned: { floor: '#1c3a3a', floor2: '#244848', wall: '#2a5a54', wallTop: '#3e7a70', accent: '#6affd8' },
+  hook:    { floor: '#3a2c44', floor2: '#463452', wall: '#5a4068', wallTop: '#7a5a8c', accent: '#ffd84a' },
   // House interiors. `paper`/`paper2` and `pattern` dress the back wall, `trim` is the
   // wainscot and crown moulding, `beam` the wall tops seen from above, and `accent`/`rug2`
   // the rug and its border. Themes without these (the dungeons) fall back to their masonry.
@@ -86,6 +106,9 @@ export const THEMES = {
     paper: '#3c4c6c', paper2: '#d8c48e', pattern: 'stars', trim: '#28304a', beam: '#2c2230', rug2: '#f0c83a' },
   marlo:   { floor: '#a47e54', floor2: '#b69066', wall: '#a8c0d0', wallTop: '#c0d4e0', accent: '#b8483a',
     paper: '#c4d6e0', paper2: '#a6bed0', pattern: 'stripes', trim: '#5e7e96', beam: '#46382a', rug2: '#f0ead8' },
+  // Castle Mirri's throne room: grey stone, a long red carpet with gold edges
+  castle:  { floor: '#8a8478', floor2: '#9a9488', wall: '#7a7480', wallTop: '#9a94a0', accent: '#b0283a',
+    paper: '#9a94a0', paper2: '#7a7480', pattern: 'stone', trim: '#5a5462', beam: '#4a4452', rug2: '#f0c83a' },
 };
 
 // Blend two hex colors, and a shorthand that blends toward black (amt < 0) or a warm white
@@ -172,6 +195,8 @@ function paintTile(g, id, frame, theme, variant = 0) {
         case 'stripes': px(2, y, p2, 2); px(10, y, p2, 2); break;
         case 'dots': if (Y % 6 === 1 || Y % 6 === 2) { const o = Math.floor(Y / 6) % 2 ? 5 : 1; px(o, y, p2, 2); px(o + 8, y, p2, 2); } break;
         case 'planks': px(0, y, p2); px(8, y, p2); px(1, y, shade(p, 0.1)); px(9, y, shade(p, 0.1)); break;
+        // dressed stone: mortar every fourth row, the joints staggered course by course
+        case 'stone': if (Y % 4 === 3) px(0, y, p2, 16); else { const o = (Y >> 2) % 2 ? 4 : 12; px(o, y, p2); } break;
       }
     }
     if (th.pattern === 'stars') {
@@ -318,6 +343,130 @@ function paintTile(g, id, frame, theme, variant = 0) {
       }
       px(0, 0, shade(th.floor, -0.3), 1, 16); px(15, 0, shade(th.floor, -0.3), 1, 16); break;
 
+    // ---- the Platypus Kingdom ----
+    case T.MOUND: {
+      // a hump of loose dirt: grass outdoors, the dungeon's own floor below ground
+      if (theme === 'ow') grass(); else { fill(th.floor); px(2, 1, th.floor2, 8); }
+      px(2, 6, '#4a3020', 12, 8); px(3, 5, '#4a3020', 10, 10); px(4, 4, '#4a3020', 8, 1);
+      px(3, 6, '#8a5a34', 10, 7); px(4, 5, '#a8744a', 8, 3); px(5, 5, '#c08a58', 4, 1);
+      px(6, 9, '#5e3c24', 1, 2); px(9, 8, '#5e3c24', 1, 2); px(11, 10, '#5e3c24', 1, 1);
+      px(4 + variant, 11, '#5e3c24', 2, 1); break;
+    }
+    case T.DIRTPILE: {
+      // a big heap of dirt and stones, piled shoulder-high
+      if (theme === 'ow') grass(); else fill(th.floor);
+      px(1, 4, '#3a2418', 14, 11); px(3, 1, '#3a2418', 10, 3); px(0, 7, '#3a2418', 16, 7);
+      px(2, 5, '#7a4e2e', 12, 9); px(4, 2, '#7a4e2e', 8, 4); px(1, 8, '#7a4e2e', 14, 5);
+      px(4, 2, '#a0683e', 6, 2); px(3, 5, '#a0683e', 5, 2); px(9, 6, '#a0683e', 3, 1);
+      px(6, 9, '#8a8478', 2, 2); px(11, 11, '#8a8478', 2, 1); px(3, 11, '#5a3a22', 3, 1);
+      px(10, 4, '#5a3a22', 1, 3); break;
+    }
+    case T.RUBBLE: {
+      // a tumble of cracked tan boulders, held together by nothing much at all
+      if (theme === 'ow') grass(); else fill(th.floor);
+      px(3, 14, '#29334255', 11, 2);
+      for (const [x, y, w, h] of [[1, 7, 7, 7], [7, 6, 8, 8], [4, 1, 8, 7]]) {
+        px(x, y, '#4a3e32', w, h); px(x + 1, y + 1, '#a08a6a', w - 2, h - 2);
+        px(x + 1, y + 1, '#c8b08a', w - 3, 2);
+      }
+      px(7, 3, '#4a3e32', 1, 3); px(8, 5, '#4a3e32', 2, 1); px(4, 10, '#4a3e32', 2, 1);
+      px(11, 9, '#4a3e32', 1, 3); px(12 - variant, 12, '#4a3e32', 1, 1); break;
+    }
+    case T.LOWWALL: {
+      // a knee-high stone wall: ground shows above it, so it reads as something to hop
+      if (theme === 'ow') grass(); else fill(th.floor);
+      const stone = theme === 'ow' ? '#9a948a' : th.wallTop, dark = theme === 'ow' ? '#5a564e' : shade(th.wall, -0.35);
+      px(0, 7, dark, 16, 8); px(0, 6, stone, 16, 6);
+      px(0, 6, shade(stone, 0.25), 16, 1);
+      px(3 + variant, 8, dark, 1, 4); px(10 - variant, 8, dark, 1, 4); px(0, 12, dark, 16, 1);
+      px(0, 14, '#10182433', 16, 2); break;
+    }
+    case T.UNDERPASS: {
+      // deep water running in under a low rock arch
+      water(theme === 'ow' ? '#315e80' : '#294c68', theme === 'ow' ? '#2c5678' : '#24435f', theme === 'ow' ? '#518aa4' : '#53889c');
+      const rk = theme === 'ow' ? '#6a6670' : th.wall, top = theme === 'ow' ? '#8a8690' : th.wallTop;
+      px(0, 0, rk, 16, 7); px(0, 0, top, 16, 3); px(0, 7, shade(rk, -0.4), 16, 2);
+      px(2, 9, '#0a142466', 12, 3); px(4 + variant, 4, shade(rk, -0.25), 3, 1); break;
+    }
+    case T.POST: {
+      // a sturdy wooden post with an iron ring on top for a grapple to bite into
+      if (theme === 'ow') grass(); else fill(th.floor);
+      px(4, 13, '#10182455', 9, 3);
+      px(6, 3, '#4a3020', 5, 12); px(7, 3, '#8a5a34', 3, 11); px(7, 3, '#a8744a', 1, 11);
+      px(5, 12, '#4a3020', 7, 3);
+      px(5, 0, '#5a5048', 7, 5); px(6, 1, '#f0c83a', 5, 3); px(7, 2, '#5a5048', 3, 1);
+      px(6, 1, '#fff0a0', 2, 1); break;
+    }
+    case T.QPLATE: {
+      // a timer plate: step on it and the doors stay open only while its sand runs
+      fill(th.floor);
+      px(3, 3, '#8a7a52', 10, 10); px(4, 4, '#c8b07a', 8, 8);
+      px(6, 5, '#5a4a2a', 4, 1); px(6, 10, '#5a4a2a', 4, 1);
+      px(7, 6, '#f0c83a', 2, 1); px(7, 7, '#5a4a2a', 2, 2); px(6, 9, '#f0c83a', 4, 1); break;
+    }
+    case T.CWALL: {
+      // Castle Mirri's dressed stone: big pale blocks in neat courses
+      fill('#a8a4a0');
+      for (let y = 0; y < 16; y += 4) {
+        px(0, y + 3, '#7a7672', 16, 1); px(0, y, '#bcb8b2', 16, 1);
+        const o = (y / 4) % 2 ? 4 : 0;
+        px(o + 3, y, '#7a7672', 1, 3); px(o + 11, y, '#7a7672', 1, 3);
+      }
+      px(5 + variant, 6, '#c8c4be', 2, 1); break;
+    }
+    case T.CTOP: {
+      // the wall-walk from above, with the crenellations along its outer edge
+      fill('#8e8a86');
+      px(0, 0, '#6a6662', 16, 1); px(0, 15, '#6a6662', 16, 1);
+      px(0, 1, '#bcb8b2', 4, 4); px(8, 1, '#bcb8b2', 4, 4);
+      px(0, 5, '#5a5652', 4, 1); px(8, 5, '#5a5652', 4, 1);
+      px(2 + variant, 10, '#7a7672', 4, 1); break;
+    }
+    case T.CFLOOR: {
+      // courtyard flagstones, warm and swept
+      fill('#c8bca0');
+      px(0, 7, '#a8987a', 16, 1); px(0, 15, '#a8987a', 16, 1);
+      px(variant % 2 ? 4 : 10, 0, '#a8987a', 1, 7); px(variant % 2 ? 11 : 5, 8, '#a8987a', 1, 7);
+      px(1, 1, '#d8ccb2', 5, 1); px(7, 9, '#d8ccb2', 5, 1); break;
+    }
+    case T.DUG: {
+      // freshly turned earth with a hole in the middle
+      if (theme === 'ow') grass(); else fill(th.floor);
+      px(2, 3, '#5a3a24', 12, 10); px(1, 5, '#5a3a24', 14, 6); px(3, 2, '#5a3a24', 10, 12);
+      px(3, 4, '#7a5234', 10, 8);
+      px(5, 6, '#2a1a10', 6, 4); px(6, 5, '#2a1a10', 4, 6); px(6, 6, '#1a100a', 4, 3);
+      px(4 + variant, 3, '#9a6a44', 2, 1); px(11, 11, '#9a6a44', 2, 1); break;
+    }
+    // ---- the ocean ----
+    case T.OCEAN:
+      water('#24508a', '#1f477c', '#4a80b8');
+      if (variant === 1 && !frame) { px(5, 9, '#d8f0ff', 3, 1); px(6, 8, '#d8f0ff'); }
+      break;
+    case T.REEF: {
+      // clear turquoise water over pale sand, little bits of coral on the bottom
+      water('#3aa8b0', '#34989f', '#8ae0dc');
+      const bits = [['#ff7aa8', 2, 12], ['#ffb04a', 11, 4], ['#b07ae0', 7, 13], ['#ff7aa8', 13, 10]];
+      for (let i = 0; i < 2; i++) { const [c, x, y] = bits[(variant + i) % 4]; px(x, y, c, 2, 1); px(x, y - 1, c, 1, 1); }
+      break;
+    }
+    case T.CORAL: {
+      water('#3aa8b0', '#34989f', '#8ae0dc');
+      const kind = variant % 4;
+      if (kind === 0) {           // branching pink coral
+        px(7, 6, '#c84a7a', 2, 9); px(3, 4, '#c84a7a', 2, 6); px(11, 3, '#c84a7a', 2, 7); px(4, 9, '#c84a7a', 8, 2);
+        px(3, 3, '#ff8ab8', 2, 2); px(11, 2, '#ff8ab8', 2, 2); px(7, 5, '#ff8ab8', 2, 2);
+      } else if (kind === 1) {    // brain coral: a round ridged dome
+        px(3, 6, '#c8783a', 10, 8); px(4, 5, '#c8783a', 8, 10); px(5, 6, '#f0a858', 6, 7);
+        px(5, 8, '#c8783a', 6, 1); px(6, 10, '#c8783a', 4, 1); px(5, 12, '#c8783a', 6, 1);
+      } else if (kind === 2) {    // a purple sea fan
+        for (let i = 0; i < 6; i++) px(2 + i * 2, 3 + Math.abs(2.5 - i), '#8a4ac8', 1, 11 - Math.abs(2.5 - i) * 2);
+        px(2, 6, '#b07ae0', 12, 1); px(3, 9, '#b07ae0', 10, 1); px(7, 12, '#5a2a8a', 2, 3);
+      } else {                    // tube sponges, with a little fish
+        for (const [x, h] of [[3, 9], [7, 12], [11, 7]]) { px(x, 15 - h, '#e8c040', 3, h); px(x + 1, 15 - h, '#7a5a10', 1, 2); }
+        px(10, 4, '#ff8a3a', 3, 2); px(13, 4, '#ff8a3a', 1, 1); px(10, 4, '#111', 1, 1);
+      }
+      break;
+    }
     case T.THORNS: fill('#3e6956'); for (let i = 0; i < 3; i++) { px(1 + i * 5, 6, '#6a3a5a', 3, 8); px(2 + i * 5, 3, '#8a4a72', 1, 4); } break;
 
     // ---- dungeon tiles (theme-colored) ----
@@ -434,7 +583,7 @@ export function buildTileAtlas(theme = 'ow') {
 }
 
 const ANIMATED = new Set([T.SHALLOW, T.DEEP, T.LAVA, T.DLAVA, T.DWATER, T.TORCH, T.SPIKES, T.GUST, T.ASH, T.BASALT, T.STORMROCK,
-  T.GOO, T.XSPIRE, T.PASSAGE]);
+  T.GOO, T.XSPIRE, T.PASSAGE, T.UNDERPASS, T.OCEAN, T.REEF, T.CORAL]);
 
 export function drawTileTo(ctx, theme, id, x, y, time, neighbors = null) {
   const atlas = atlases[theme] || buildTileAtlas(theme);
@@ -510,7 +659,7 @@ export const props = (id) => P[id] || {};
 
 // Draw inside the liquid tile, so banks cannot cover a neighbor or alter collisions.
 // The caller supplies [north, east, south, west]; isolated atlas previews need none.
-const WATER = new Set([T.SHALLOW, T.DEEP, T.DWATER, T.REED]);
+const WATER = new Set([T.SHALLOW, T.DEEP, T.DWATER, T.REED, T.UNDERPASS, T.OCEAN, T.REEF, T.CORAL]);
 const HOT = new Set([T.LAVA, T.DLAVA]);
 function drawBanks(ctx, id, x, y, neighbors) {
   const water = WATER.has(id), hot = HOT.has(id), goo = id === T.GOO;

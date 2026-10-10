@@ -13,7 +13,7 @@
 // `text` is what Gus reads when he inspects it; `talk` hands the inspect to game.js
 // (the shop counter, Tully's map, the keepsake plaque).
 
-import { TILE, KEEPSAKES } from './config.js';
+import { TILE, KEEPSAKES, OCEAN_W } from './config.js';
 import { T } from './tiles.js';
 
 const CH = { '#': T.HBEAM, '^': T.HWALL_UP, 'w': T.HWIN, '=': T.HWALL, '.': T.HFLOOR, 'r': T.RUG, 'X': T.EXIT };
@@ -53,7 +53,7 @@ export const HOUSES = {
         text: st.sword > 0
           ? "Dad's sword rack. It's empty now -- the sword is off on an adventure with Gus!"
           : "Dad's sword rack, empty. Dad always kept his old sword in the chest by the front door..." },
-      { sprite: 'bookshelf', tx: 9, ty: 2, w: 2,
+      { sprite: 'bookshelf', tx: 9, ty: 2, w: 2, shelf: 'gus',
         text: "Gus's books: 'Crayfish and How to Catch Them', 'Swim Like a Champion', 'Great Guardians of the Vale', and a very worn-out comic called 'Captain Bill'." },
       { sprite: 'basket', tx: 4, ty: 3,
         text: st.flags.parents_free
@@ -110,7 +110,7 @@ export const HOUSES = {
       { sprite: 'growthchart', tx: 13, ty: 1, wall: true, hang: 2,
         text: 'A growth chart covered in fifty teeny-tiny pencil marks. They all say about the same height.' },
       { sprite: 'toybox', tx: 15, ty: 2, text: 'A toy box stuffed with wooden fish, bouncy balls and one very chewed stick sword.' },
-      { sprite: 'bookshelf', tx: 17, ty: 2, w: 2,
+      { sprite: 'bookshelf', tx: 17, ty: 2, w: 2, shelf: 'mama',
         text: "Bedtime stories: 'The Very Hungry Crayfish', 'Goodnight Billabong' and 'Where the Wild Puggles Are'." },
       { sprite: 'lowtable', tx: 1, ty: 7, w: 2,
         text: 'Lunchtime! A row of tiny bowls of mashed worms, and every bowl has a name painted on it.' },
@@ -200,7 +200,7 @@ export const HOUSES = {
       { sprite: 'crochead', tx: 3, ty: 1, wall: true, hang: 8,
         text: 'A stuffed croc head. Tully swears it was like that when he found it.' },
       { sprite: 'telescope', tx: 9, ty: 5, text: 'A brass telescope. Tully uses it to spot curios from miles away. And to spy on the neighbors.' },
-      { sprite: 'books', tx: 1, ty: 6, text: "Stacks of books: 'Curious Things of the Vale', volumes one through forty-two." },
+      { sprite: 'books', tx: 1, ty: 6, shelf: 'tully', text: "Stacks of books: 'Curious Things of the Vale', volumes one through forty-two." },
       { sprite: 'plant', tx: 11, ty: 7, text: 'A carnivorous plant. It snapped at Gus!' },
     ],
     npcs: [{ sprite: 'tully', name: 'Tully', dialog: 'tully', tx: 6, ty: 3 }],
@@ -238,7 +238,54 @@ export const HOUSES = {
       ];
     },
   },
+
+  // Castle Mirri's throne room, over in the Platypus Kingdom: a long red carpet up to the
+  // throne, guards along it, the royal library on the left and the royal table on the right.
+  castle: {
+    name: 'Castle Mirri', theme: 'castle', music: 'castle', area: 'kingdom', door: [74, 40],
+    map: [
+      '#^^w^^^^^w^^^^^w^^^^^w^^#',
+      '#=======================#',
+      '#..........rrr..........#',
+      '#..........rrr..........#',
+      '#..........rrr..........#',
+      '#..........rrr..........#',
+      '#..........rrr..........#',
+      '#..........rrr..........#',
+      '#..........rrr..........#',
+      '#..........rrr..........#',
+      '#..........rrr..........#',
+      '#..........rrr..........#',
+      '############X############',
+    ],
+    furniture: () => [
+      { sprite: 'throne', tx: 12, ty: 2, text: "Elder Mirri's throne. It is very tall. Mirri is not. She uses a cushion." },
+      { sprite: 'banner', tx: 7, ty: 1, wall: true, hang: 4, text: 'The royal banner: a golden platypus on red.' },
+      { sprite: 'banner', tx: 17, ty: 1, wall: true, hang: 4, text: 'The royal banner: a golden platypus on red.' },
+      { sprite: 'bookshelf', tx: 1, ty: 2, w: 2, shelf: 'library', text: '' },
+      { sprite: 'bookshelf', tx: 3, ty: 2, w: 2, shelf: 'royal', text: '' },
+      { sprite: 'bookshelf', tx: 5, ty: 2, w: 2, shelf: 'secrets', text: '' },
+      { sprite: 'table', tx: 18, ty: 5, w: 2, text: 'The royal table, set for a feast: crayfish pie, crayfish soup, and crayfish surprise (the surprise is more crayfish).' },
+      { sprite: 'weaponrack', tx: 21, ty: 1, wall: true, hang: 6, text: 'The royal armory. One sword is labelled "FOR GUS, ONE DAY".' },
+      { sprite: 'plant', tx: 1, ty: 10, text: 'A royal fern. It looks very important.' },
+      { sprite: 'plant', tx: 23, ty: 10, text: 'Another royal fern. It looks even more important.' },
+    ],
+    npcs: [
+      { sprite: 'queen', name: 'Elder Mirri', dialog: 'elder', tx: 12, ty: 3 },
+      { sprite: 'guard', name: 'Royal Guard', dialog: 'royalguard', tx: 10, ty: 5 },
+      { sprite: 'guard', name: 'Royal Guard', dialog: 'royalguard', tx: 14, ty: 5 },
+      { sprite: 'guard', name: 'Royal Guard', dialog: 'royalguard', tx: 10, ty: 9 },
+      { sprite: 'guard', name: 'Royal Guard', dialog: 'royalguard', tx: 14, ty: 9 },
+      { sprite: 'cit_chef', name: 'Chef Pudding', dialog: 'chef', tx: 20, ty: 7 },
+      { sprite: 'cit_librarian', name: 'Librarian Quill', dialog: 'librarian', tx: 4, ty: 5 },
+      { sprite: 'cit_jester', name: 'Jester Bonbon', dialog: 'jester', tx: 7, ty: 9 },
+    ],
+  },
 };
+
+// The doors above are written in the Vale's own tiles; out in the world they sit past the
+// ocean margin all round it. (A house in another area says so with `area`.)
+for (const h of Object.values(HOUSES)) if (!h.area) h.door = [h.door[0] + OCEAN_W, h.door[1] + OCEAN_W];
 
 export const HOUSE_IDS = Object.keys(HOUSES);
 

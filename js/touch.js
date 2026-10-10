@@ -20,11 +20,14 @@ export const PAD_BUTTONS = [
   { action: 'cycleR', x: 378, y: 118, r: 12, icon: 'arrow' },
   // a tap latches sprint on (see Player.updateSprint), so it needn't sit under the thumb
   { action: 'sprint', x: 336, y: 126, r: 14, icon: 'run' },
+  // the Kingdom's powers (only shown once Gus has one)
+  { action: 'power', x: 278, y: 158, r: 14, icon: 'power', needs: 'power' },
 ];
 
 // Spaced 40px apart so the padded hit zones (r + HIT_PAD = 18) can't overlap.
 // Away from the thumb-rest zones on purpose: these are deliberate presses, not combat.
 export const TOP_BUTTONS = [
+  { action: 'powerNext', x: 104, y: 13, r: 11, icon: 'swap', needs: 'power' },
   { action: 'teleport', x: 144, y: 13, r: 11, icon: 'warp' },
   { action: 'map', x: 184, y: 13, r: 11, icon: 'M' },
   { action: 'pause', x: 224, y: 13, r: 11, icon: 'pause' },
